@@ -81,11 +81,16 @@ def check_all_sites():
         check_site(site)
 
 def run_monitor():
-    schedule.every(5).minutes.do(check_all_sites)  # ← 여기만 1 → 5분으로 변경됨
+    schedule.every(5).minutes.do(check_all_sites)
     print("📡 사이트 감시 시작 (5분 간격)")
     while True:
         schedule.run_pending()
         time.sleep(1)
 
 if __name__ == "__main__":
-    run_monitor()
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        # GitHub Actions에서는 딱 한 번 실행 후 종료
+        check_all_sites()
+    else:
+        # 로컬에서 실행할 때는 감시 루프 지속
+        run_monitor()
