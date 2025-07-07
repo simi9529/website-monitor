@@ -27,5 +27,6 @@ jobs:
         FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
         TO_EMAIL: ${{ secrets.TO_EMAIL }}
         APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+  GITHUB_ACTIONS: true
       run: |
         python dongaupdate.py
