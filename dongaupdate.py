@@ -18,7 +18,7 @@ sites = [
     {
         "name": "동아대 law 학사공지",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN056",
-        "last_title": "임의의 옛날 제목",
+       "last_title": None,
         "selector": "table.bdListTbl td.subject a"
     },
     {
