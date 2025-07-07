@@ -19,19 +19,19 @@ sites = [
         "name": "동아대 law 학사공지",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN056",
         "last_title": None,
-        "selector": "td.subject p.stitte a"
+        "selector": "table.bdListTbl td.subject a"
     },
     {
         "name": "동아대 law 수업공지",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN057",
         "last_title": None,
-        "selector": "td.subject p.stitte a"
+        "selector": "table.bdListTbl td.subject a"
     },
     {
         "name": "동아대 law 특강및 모의고사",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN059",
         "last_title": None,
-        "selector": "td.subject p.stitte a"
+        "selector": "table.bdListTbl td.subject a"
     }
 ]
 
