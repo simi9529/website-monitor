@@ -1,17 +1,3 @@
-import json
-
-STORAGE_PATH = "storage.json"
-
-def load_last_titles():
-    if os.path.exists(STORAGE_PATH):
-        with open(STORAGE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
-
-def save_last_titles(data):
-    with open(STORAGE_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
 import requests
 from bs4 import BeautifulSoup
 import smtplib
@@ -32,19 +18,19 @@ sites = [
     {
         "name": "동아대 law 학사공지",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN056",
-       "last_title": None,
+       "last_title": "킹",
         "selector": "table.bdListTbl td.subject a"
     },
     {
         "name": "동아대 law 수업공지",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN057",
-        "last_title": None,
+        "last_title": "킹",
         "selector": "table.bdListTbl td.subject a"
     },
     {
         "name": "동아대 law 특강및 모의고사",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN059",
-        "last_title": None,
+        "last_title": "킹",
         "selector": "table.bdListTbl td.subject a"
     }
 ]
@@ -91,17 +77,9 @@ def check_site(site):
         print(f"❌ [{site['name']}] 오류 발생: {e}")
 
 def check_all_sites():
-    last_titles = load_last_titles()
-
     for site in sites:
-        site_name = site["name"]
-        site["last_title"] = last_titles.get(site_name)
         check_site(site)
-        # 업데이트된 제목 저장
-        last_titles[site_name] = site["last_title"]
 
-    save_last_titles(last_titles)
-    
 def run_monitor():
     schedule.every(5).minutes.do(check_all_sites)
     print("📡 사이트 감시 시작 (5분 간격)")
