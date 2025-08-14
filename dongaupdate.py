@@ -35,6 +35,11 @@ sites = [
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN059",
         "selector": "table.bdListTbl td.subject a"
     }
+     {
+        "name": "이화이언 알바하자",
+        "url": "https://ewhaian.com/c4/p3/4",
+        "selector": ".table-tit a span"
+    }
 ]
 
 def load_titles():
