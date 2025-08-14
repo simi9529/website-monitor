@@ -11,6 +11,10 @@ FROM_EMAIL = os.environ.get("FROM_EMAIL")
 TO_EMAIL = os.environ.get("TO_EMAIL")
 APP_PASSWORD = os.environ.get("APP_PASSWORD")
 
+# 로그인 정보
+USER_ID = os.environ.get("USER_ID")
+USER_PW = os.environ.get("USER_PW")
+
 # 상태 파일 경로
 STATE_FILE = "titles.json"
 
@@ -57,9 +61,23 @@ def send_email(subject, body):
     except Exception as e:
         print(f"❌ 이메일 발송 실패: {e}")
 
-def check_site(site, last_titles):
+def login(session, login_url, login_data):
+    """주어진 세션 객체를 사용하여 로그인합니다."""
     try:
-        response = requests.get(site["url"])
+        # 로그인 요청을 보냅니다.
+        response = session.post(login_url, data=login_data)
+        response.raise_for_status()
+        # 로그인 성공 여부를 확인하는 추가 로직을 여기에 넣을 수 있습니다.
+        print("✅ 로그인 성공")
+        return True
+    except Exception as e:
+        print(f"❌ 로그인 실패: {e}")
+        return False
+
+def check_site(site, last_titles, session):
+    try:
+        # requests.get() 대신 session.get() 사용
+        response = session.get(site["url"])
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
         post_tag = soup.select_one(site["selector"])
@@ -83,11 +101,23 @@ def check_site(site, last_titles):
     except Exception as e:
         print(f"❌ [{site['name']}] 오류 발생: {e}")
 
-def check_all_sites():
+def check_all_sites(session):
     last_titles = load_titles()
     for site in sites:
-        check_site(site, last_titles)
+        check_site(site, last_titles, session)
     save_titles(last_titles)
 
 if __name__ == "__main__":
-    check_all_sites()
+    USER_ID = os.environ.get("USER_ID")
+    USER_PW = os.environ.get("USER_PW")
+
+    with requests.Session() as session:
+        # TODO: 모니터링하려는 사이트의 로그인 URL 및 form 데이터의 키를 실제 값으로 수정하세요.
+        login_url = "https://www.ewhaian.com/login"
+        login_data = {
+            "username": USER_ID,
+            "password": USER_PW
+        }
+
+        if login(session, login_url, login_data):
+            check_all_sites(session)
