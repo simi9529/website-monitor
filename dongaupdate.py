@@ -35,6 +35,11 @@ sites = [
         "name": "이화이언 자유게시판",
         "url": "https://ewhaian.com/c4/p3/4",
         "selector": ".table-tit a span"
+    },
+    {
+        "name": "공모주는 커피다",
+        "url": "https://x.com/skfwkRnsk",
+        "selector": "span.css-1jxf684"
     }
 ]
 
