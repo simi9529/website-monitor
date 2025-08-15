@@ -10,12 +10,15 @@ from urllib.parse import urljoin
 FROM_EMAIL = os.environ.get("FROM_EMAIL")
 TO_EMAIL = os.environ.get("TO_EMAIL")
 APP_PASSWORD = os.environ.get("APP_PASSWORD")
+USER_ID = os.environ.get("USER_ID")
+USER_PW = os.environ.get("USER_PW")
 
 # 상태 파일 경로
 STATE_FILE = "titles.json"
 
 # 감시할 사이트 정보
-sites = [
+# 로그인이 필요 없는 공공 사이트
+public_sites = [
     {
         "name": "동아대 law 학사공지",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN056",
@@ -24,22 +27,21 @@ sites = [
     {
         "name": "동아대 law 수업공지",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN057",
-        "selector": "table.bdListTbl td.subject a"
+        "selector": ".stitle_stitleNew a"
     },
     {
         "name": "동아대 law 특강및 모의고사",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN059",
-        "selector": "table.bdListTbl td.subject a"
-    },
+        "selector": ".stitle_stitleNew a"
+    }
+]
+
+# 로그인이 필요한 사이트
+login_required_sites = [
     {
         "name": "이화이언 자유게시판",
         "url": "https://ewhaian.com/c4/p3/4",
         "selector": ".table-tit a span"
-    },
-    {
-        "name": "공모주는 커피다",
-        "url": "https://x.com/skfwkRnsk",
-        "selector": "span.css-1jxf684"
     }
 ]
 
@@ -78,9 +80,16 @@ def login(session, login_url, login_data):
         print(f"❌ 로그인 실패: {e}")
         return False
 
-def check_site(site, last_titles, session):
+def check_site(site, last_titles, session=None):
+    """
+    사이트를 확인합니다. 세션이 필요한 경우 세션 객체를 사용합니다.
+    """
     try:
-        response = session.get(site["url"])
+        if session:
+            response = session.get(site["url"])
+        else:
+            response = requests.get(site["url"])
+            
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
         post_tag = soup.select_one(site["selector"])
@@ -104,20 +113,30 @@ def check_site(site, last_titles, session):
 
 def check_all_sites(session):
     last_titles = load_titles()
-    for site in sites:
-        check_site(site, last_titles, session)
+
+    # 1. 로그인 필요한 사이트 확인
+    if session:
+        for site in login_required_sites:
+            check_site(site, last_titles, session)
+    
+    # 2. 로그인 필요 없는 사이트 확인
+    for site in public_sites:
+        check_site(site, last_titles)
+        
     save_titles(last_titles)
 
 if __name__ == "__main__":
-    USER_ID = os.environ.get("USER_ID")
-    USER_PW = os.environ.get("USER_PW")
+    login_url = "https://ewhaian.com/login"
+    login_data = {
+        "member_id": USER_ID,
+        "member_pw": USER_PW
+    }
 
     with requests.Session() as session:
-        login_url = "https://ewhaian.com/login"
-        login_data = {
-            "member_id": USER_ID,
-            "member_pw": USER_PW
-        }
-
+        # 로그인 시도
         if login(session, login_url, login_data):
+            # 로그인 성공 시, 로그인 필요한 사이트와 공공 사이트 모두 확인
             check_all_sites(session)
+        else:
+            # 로그인 실패 시, 공공 사이트만 확인
+            check_all_sites(None)
