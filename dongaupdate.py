@@ -34,11 +34,6 @@ public_sites = [
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN059",
         "selector": "table.bdListTbl td.subject a"
     },
-     {
-        "name": "공모주는 커피다",
-        "url": "https://x.com/skfwkRnsk",
-        "selector": "span.css-1jxf684"
-    }
 ]
 
 # 로그인이 필요한 사이트
