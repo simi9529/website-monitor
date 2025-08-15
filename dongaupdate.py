@@ -81,6 +81,9 @@ def login(session, login_url, login_data):
         return False
 
 def check_site(site, last_titles, session=None):
+    """
+    사이트를 확인합니다. 세션이 필요한 경우 세션 객체를 사용합니다.
+    """
     try:
         if session:
             response = session.get(site["url"])
@@ -89,20 +92,11 @@ def check_site(site, last_titles, session=None):
             
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
-        
-        # 모든 게시글 항목을 리스트로 가져옴
-        all_posts = soup.select('table.bdListTbl td.subject a')
+        post_tag = soup.select_one(site["selector"])
 
-        # 공지글을 건너뛰고 첫 번째 일반글을 찾음
-        first_regular_post = None
-        for post in all_posts:
-            # 게시글의 상위 태그(<tr>)에 'child_isnotice' 클래스가 없는지 확인
-            if 'child_isnotice' not in post.find_parent('tr').get('class', []):
-                first_regular_post = post
-                break
-
-        if first_regular_post:
-            title = first_regular_post.text.strip()
+        if post_tag:
+            title = post_tag.text.strip()
+            # href는 javascript:goDetail() 이므로 링크 추출 로직을 생략합니다.
             last_title = last_titles.get(site["name"])
 
             if last_title != title:
