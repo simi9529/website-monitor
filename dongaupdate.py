@@ -17,7 +17,7 @@ USER_PW = os.environ.get("USER_PW")
 STATE_FILE = "titles.json"
 
 # 감시할 사이트 정보
-# 로그인이 필요 없는 공공 사이트 (동아대 사이트는 간단한 선택자로 변경)
+# 동아대 사이트 리스트에서 'selector' 키를 제거합니다.
 public_sites = [
     {
         "name": "동아대 law 학사공지",
@@ -105,7 +105,6 @@ def check_site(site, last_titles, session=None):
         else:
             # 이화이언 등 그 외 사이트의 경우 원래의 선택자 사용
             post_tag = soup.select_one(site["selector"])
-
 
         if post_tag:
             title = post_tag.text.strip()
