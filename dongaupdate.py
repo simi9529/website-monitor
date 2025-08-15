@@ -128,8 +128,8 @@ def check_all_sites(session):
 if __name__ == "__main__":
     login_url = "https://ewhaian.com/login"
     login_data = {
-        "member_id": USER_ID,
-        "member_pw": USER_PW
+        "username": USER_ID,
+        "password": USER_PW
     }
 
     with requests.Session() as session:
