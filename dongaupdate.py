@@ -19,7 +19,7 @@ sites = [
     {
         "name": "동아대 law 학사공지",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN056",
-        "selector": "table.bdListTbl td.subject a"
+        "selector": ".stitle_stitleNew a"
     },
     {
         "name": "동아대 law 수업공지",
