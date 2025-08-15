@@ -22,7 +22,7 @@ public_sites = [
     {
         "name": "동아대 law 학사공지",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN056",
-        "selector": "table.bdListTbl tr:not(.child_isnotice) td.subject a"
+        "selector": "table.bdListTbl td.num + td.subject a"
     },
     {
         "name": "동아대 law 수업공지",
