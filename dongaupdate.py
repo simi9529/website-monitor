@@ -21,18 +21,15 @@ STATE_FILE = "titles.json"
 public_sites = [
     {
         "name": "동아대 law 학사공지",
-        "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN056",
-        "selector": "table.bdListTbl td.subject a"
+        "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN056"
     },
     {
         "name": "동아대 law 수업공지",
-        "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN057",
-        "selector": "table.bdListTbl td.subject a"
+        "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN057"
     },
     {
         "name": "동아대 law 특강및 모의고사",
-        "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN059",
-        "selector": "table.bdListTbl td.subject a"
+        "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN059"
     }
 ]
 
@@ -98,7 +95,9 @@ def check_site(site, last_titles, session=None):
             # 동아대 사이트일 경우 공지글 제외 로직 적용
             all_rows = soup.select('table.bdListTbl tr')
             for row in all_rows:
+                # 'child_isnotice' 클래스가 없는 행(일반글)을 찾음
                 if 'child_isnotice' not in row.get('class', []):
+                    # 그 행의 제목(<a> 태그)을 찾음
                     title_tag = row.select_one('td.subject a')
                     if title_tag:
                         post_tag = title_tag
