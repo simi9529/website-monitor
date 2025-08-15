@@ -17,12 +17,12 @@ USER_PW = os.environ.get("USER_PW")
 STATE_FILE = "titles.json"
 
 # 감시할 사이트 정보
-# 로그인이 필요 없는 공공 사이트
+# 로그인이 필요 없는 공공 사이트 (동아대 사이트는 간단한 선택자로 변경)
 public_sites = [
     {
         "name": "동아대 law 학사공지",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN056",
-        "selector": "table.bdListTbl td.num + td.subject a"
+        "selector": "table.bdListTbl td.subject a"
     },
     {
         "name": "동아대 law 수업공지",
@@ -81,10 +81,10 @@ def login(session, login_url, login_data):
         return False
 
 def check_site(site, last_titles, session=None):
-    """
-    사이트를 확인합니다. 세션이 필요한 경우 세션 객체를 사용합니다.
-    """
     try:
+        # 동아대 사이트인지 확인
+        is_donga_site = "동아대" in site["name"]
+
         if session:
             response = session.get(site["url"])
         else:
@@ -92,11 +92,24 @@ def check_site(site, last_titles, session=None):
             
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
-        post_tag = soup.select_one(site["selector"])
+        
+        post_tag = None
+        if is_donga_site:
+            # 동아대 사이트일 경우 공지글 제외 로직 적용
+            all_rows = soup.select('table.bdListTbl tr')
+            for row in all_rows:
+                if 'child_isnotice' not in row.get('class', []):
+                    title_tag = row.select_one('td.subject a')
+                    if title_tag:
+                        post_tag = title_tag
+                        break
+        else:
+            # 이화이언 등 그 외 사이트의 경우 원래의 선택자 사용
+            post_tag = soup.select_one(site["selector"])
+
 
         if post_tag:
             title = post_tag.text.strip()
-            # href는 javascript:goDetail() 이므로 링크 추출 로직을 생략합니다.
             last_title = last_titles.get(site["name"])
 
             if last_title != title:
