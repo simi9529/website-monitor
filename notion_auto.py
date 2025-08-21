@@ -25,8 +25,8 @@ def update_period():
 
         # 끝 날짜가 있을 때만 업데이트
         if end_prop:
-            # 현재 "기간" 값 가져오기
-            current_period = props.get("기간", {}).get("date", {})
+            # 현재 "기간" 값 가져오기, None 체크
+            current_period = props.get("기간", {}).get("date") or {}
             current_start = current_period.get("start")
             current_end = current_period.get("end")
 
