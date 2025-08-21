@@ -1,0 +1,27 @@
+name: Notion Auto Update
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"  # 5분마다 실행
+  workflow_dispatch:        # 수동 실행 버튼도 추가
+
+jobs:
+  update-notion:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run Notion auto script
+        run: python notion_auto.py
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
