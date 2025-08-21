@@ -6,6 +6,7 @@ DATABASE_ID = os.environ["NOTION_DB_ID"]
 
 def update_period():
     results = notion.databases.query(database_id=DATABASE_ID).get("results", [])
+    print(f"총 {len(results)}개 페이지 처리")
 
     for page in results:
         props = page["properties"]
@@ -24,18 +25,27 @@ def update_period():
 
         # 끝 날짜가 있을 때만 업데이트
         if end_prop:
-            notion.pages.update(
-                page_id=page["id"],
-                properties={
-                    "기간": {
-                        "date": {
-                            "start": start_prop,
-                            "end": end_prop
+            # 현재 "기간" 값 가져오기
+            current_period = props.get("기간", {}).get("date", {})
+            current_start = current_period.get("start")
+            current_end = current_period.get("end")
+
+            # 값이 다를 때만 업데이트
+            if current_start != start_prop or current_end != end_prop:
+                notion.pages.update(
+                    page_id=page["id"],
+                    properties={
+                        "기간": {
+                            "date": {
+                                "start": start_prop,
+                                "end": end_prop
+                            }
                         }
                     }
-                }
-            )
-            print(f"✅ {page['id']} updated: {start_prop} ~ {end_prop}")
+                )
+                print(f"✅ {page['id']} updated: {start_prop} ~ {end_prop}")
+            else:
+                print(f"⏸ {page['id']} skipped: 기간 unchanged")
         else:
             print(f"⏸ {page['id']} skipped: '종료' 속성이 비어 있음")
 
