@@ -1,6 +1,7 @@
 import os
 from notion_client import Client
-from datetime import datetime, timedelta
+from datetime import timedelta
+from dateutil.parser import isoparse  # pip install python-dateutil
 
 notion = Client(auth=os.environ["NOTION_API_KEY"])
 DATABASE_ID = os.environ["NOTION_DB_ID"]
@@ -9,7 +10,7 @@ def parse_iso(dt_str):
     if not dt_str:
         return None
     try:
-        return datetime.fromisoformat(dt_str)
+        return isoparse(dt_str)  # offset-aware datetime 반환
     except Exception:
         return None
 
@@ -32,7 +33,6 @@ def update_period():
         if end_value and end_value.get("date"):
             end_prop = end_value["date"].get("start")
 
-        # 종료일이 존재할 때만 처리
         if end_prop:
             start_dt = parse_iso(start_prop)
             end_dt = parse_iso(end_prop)
@@ -42,12 +42,10 @@ def update_period():
                 end_dt += timedelta(days=1)
                 end_prop = end_dt.isoformat()
 
-            # 현재 "기간" 값 가져오기
             current_period = props.get("기간", {}).get("date") or {}
             current_start = current_period.get("start")
             current_end = current_period.get("end")
 
-            # 값이 다를 때만 업데이트
             if current_start != start_prop or current_end != end_prop:
                 notion.pages.update(
                     page_id=page["id"],
