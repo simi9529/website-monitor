@@ -1,8 +1,17 @@
 import os
 from notion_client import Client
+from datetime import datetime, timedelta
 
 notion = Client(auth=os.environ["NOTION_API_KEY"])
 DATABASE_ID = os.environ["NOTION_DB_ID"]
+
+def parse_iso(dt_str):
+    if not dt_str:
+        return None
+    try:
+        return datetime.fromisoformat(dt_str)
+    except Exception:
+        return None
 
 def update_period():
     results = notion.databases.query(database_id=DATABASE_ID).get("results", [])
@@ -23,9 +32,17 @@ def update_period():
         if end_value and end_value.get("date"):
             end_prop = end_value["date"].get("start")
 
-        # 끝 날짜가 있을 때만 업데이트
+        # 종료일이 존재할 때만 처리
         if end_prop:
-            # 현재 "기간" 값 가져오기, None 체크
+            start_dt = parse_iso(start_prop)
+            end_dt = parse_iso(end_prop)
+
+            # 종료가 시작보다 같거나 빠르면 하루 뒤로 보정
+            if start_dt and end_dt and end_dt <= start_dt:
+                end_dt += timedelta(days=1)
+                end_prop = end_dt.isoformat()
+
+            # 현재 "기간" 값 가져오기
             current_period = props.get("기간", {}).get("date") or {}
             current_start = current_period.get("start")
             current_end = current_period.get("end")
