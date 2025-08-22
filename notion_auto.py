@@ -5,13 +5,21 @@ from datetime import datetime, timedelta
 notion = Client(auth=os.environ["NOTION_API_KEY"])
 DATABASE_ID = os.environ["NOTION_DB_ID"]
 
+from datetime import datetime, timezone
+
 def parse_iso_naive(dt_str):
-    """ISO 문자열을 offset-naive datetime으로 변환"""
+    """ISO 문자열을 offset-naive UTC datetime으로 변환"""
     if not dt_str:
         return None
+    # 'Z' 붙은 경우 → UTC로 변환
     if dt_str.endswith("Z"):
-        dt_str = dt_str[:-1]
-    return datetime.fromisoformat(dt_str)
+        dt = datetime.fromisoformat(dt_str[:-1])
+        return dt.replace(tzinfo=timezone.utc).astimezone(timezone.utc).replace(tzinfo=None)
+    # 이미 timezone 정보가 있는 경우 → naive로 변환
+    dt = datetime.fromisoformat(dt_str)
+    if dt.tzinfo:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
 
 def update_period():
     results = notion.databases.query(database_id=DATABASE_ID).get("results", [])
