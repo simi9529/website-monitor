@@ -1,6 +1,6 @@
 import os
 from notion_client import Client
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 notion = Client(auth=os.environ["NOTION_API_KEY"])
 DATABASE_ID = os.environ["NOTION_DB_ID"]
@@ -9,10 +9,15 @@ def parse_iso(dt_str):
     """ISO8601 문자열을 datetime 객체로 변환, Z/offset 포함 처리"""
     if not dt_str:
         return None
-    # Z가 붙은 UTC 문자열 처리
+    # Z(UTC) 문자열 처리
     if dt_str.endswith("Z"):
-        dt_str = dt_str.replace("Z", "+00:00")
-    return datetime.fromisoformat(dt_str)
+        dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+    else:
+        dt = datetime.fromisoformat(dt_str)
+    # offset-naive이면 UTC로 처리
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 def update_period():
     results = notion.databases.query(database_id=DATABASE_ID).get("results", [])
@@ -42,12 +47,10 @@ def update_period():
                 end_dt += timedelta(days=1)
                 end_prop = end_dt.isoformat()
 
-            # 현재 "기간" 값 가져오기
             current_period = props.get("기간", {}).get("date") or {}
             current_start = current_period.get("start")
             current_end = current_period.get("end")
 
-            # 값이 다를 때만 업데이트
             if current_start != start_prop or current_end != end_prop:
                 notion.pages.update(
                     page_id=page["id"],
