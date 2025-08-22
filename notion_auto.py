@@ -1,23 +1,17 @@
 import os
 from notion_client import Client
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 notion = Client(auth=os.environ["NOTION_API_KEY"])
 DATABASE_ID = os.environ["NOTION_DB_ID"]
 
-def parse_iso(dt_str):
-    """ISO8601 문자열을 datetime 객체로 변환, Z/offset 포함 처리"""
+def parse_iso_naive(dt_str):
+    """ISO 문자열을 offset-naive datetime으로 변환"""
     if not dt_str:
         return None
-    # Z(UTC) 문자열 처리
     if dt_str.endswith("Z"):
-        dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-    else:
-        dt = datetime.fromisoformat(dt_str)
-    # offset-naive이면 UTC로 처리
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt
+        dt_str = dt_str[:-1]
+    return datetime.fromisoformat(dt_str)
 
 def update_period():
     results = notion.databases.query(database_id=DATABASE_ID).get("results", [])
@@ -26,32 +20,34 @@ def update_period():
     for page in results:
         props = page["properties"]
 
-        # 시작 날짜
-        start_prop = None
+        # 시작
         start_value = props.get("시작")
-        if start_value and start_value.get("date"):
-            start_prop = start_value["date"].get("start")
+        start_prop = start_value["date"]["start"] if start_value and start_value.get("date") else None
 
-        # 종료 날짜
-        end_prop = None
+        # 종료
         end_value = props.get("종료")
-        if end_value and end_value.get("date"):
-            end_prop = end_value["date"].get("start")
+        end_prop = end_value["date"]["start"] if end_value and end_value.get("date") else None
 
-        if end_prop:
-            start_dt = parse_iso(start_prop)
-            end_dt = parse_iso(end_prop)
+        if not start_prop or not end_prop:
+            print(f"⏸ {page['id']} skipped: '시작' 또는 '종료' 속성이 비어 있음")
+            continue
 
-            # 종료가 시작보다 같거나 빠르면 하루 뒤로 보정
-            if start_dt and end_dt and end_dt <= start_dt:
-                end_dt += timedelta(days=1)
-                end_prop = end_dt.isoformat()
+        start_dt = parse_iso_naive(start_prop)
+        end_dt = parse_iso_naive(end_prop)
 
-            current_period = props.get("기간", {}).get("date") or {}
-            current_start = current_period.get("start")
-            current_end = current_period.get("end")
+        # 종료가 시작보다 같거나 빠르면 하루 뒤로 보정
+        if end_dt <= start_dt:
+            end_dt = start_dt + timedelta(days=1)
+            end_prop = end_dt.isoformat()
 
-            if current_start != start_prop or current_end != end_prop:
+        # 현재 "기간" 값 가져오기
+        current_period = props.get("기간", {}).get("date") or {}
+        current_start = current_period.get("start")
+        current_end = current_period.get("end")
+
+        # 값이 바뀌었을 때만 업데이트
+        if current_start != start_prop or current_end != end_prop:
+            try:
                 notion.pages.update(
                     page_id=page["id"],
                     properties={
@@ -64,10 +60,10 @@ def update_period():
                     }
                 )
                 print(f"✅ {page['id']} updated: {start_prop} ~ {end_prop}")
-            else:
-                print(f"⏸ {page['id']} skipped: 기간 unchanged")
+            except Exception as e:
+                print(f"⚠ {page['id']} update failed:", e)
         else:
-            print(f"⏸ {page['id']} skipped: '종료' 속성이 비어 있음")
+            print(f"⏸ {page['id']} skipped: 기간 unchanged")
 
 if __name__ == "__main__":
     update_period()
