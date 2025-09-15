@@ -33,11 +33,6 @@ public_sites = [
         "name": "동아대 law 특강및 모의고사",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN059",
         "selector": "table.bdListTbl td.subject a"
-    }, 
-    {
-        "name": "공모주는 커피다",
-        "url": "https://x.com/skfwkRnsk",
-        "selector": "span.css-1jxf684"
     }
 ]
 
@@ -45,7 +40,7 @@ public_sites = [
 login_required_sites = [
     {
         "name": "이화이언 자유게시판",
-        "url": "https://ewhaian.com/c4/p3/4",
+        "url": "https://ewhaian.com/life/66",
         "selector": ".table-tit a span"
     }
 ]
