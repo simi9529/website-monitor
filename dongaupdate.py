@@ -41,7 +41,7 @@ login_required_sites = [
     {
         "name": "이화이언 자유게시판",
         "url": "https://ewhaian.com/life/66",
-        "selector": ".table-tit a span"
+        "selector": "p.listTitle.title-sm"
     }
 ]
 
