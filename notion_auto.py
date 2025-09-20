@@ -43,11 +43,6 @@ def update_period():
         start_dt = parse_iso_naive(start_prop)
         end_dt = parse_iso_naive(end_prop)
 
-        # 종료가 시작보다 같거나 빠르면 하루 뒤로 보정
-        if end_dt <= start_dt:
-            end_dt = start_dt + timedelta(days=1)
-            end_prop = end_dt.isoformat()
-
         # 현재 "기간" 값 가져오기
         current_period = props.get("기간", {}).get("date") or {}
         current_start = current_period.get("start")
