@@ -25,7 +25,7 @@ login_required_sites = [
         "name": "이화이언 자유게시판",
         "url": "https://ewhaian.com/life/66",
         # CSR 해결 후 가장 확실한 선택자
-        "selector": "li.boardItem a" 
+        "selector": "ul.boardList li.boardItem a"
     }
 ]
 
