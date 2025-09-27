@@ -23,9 +23,9 @@ STATE_FILE = "titles.json"
 login_required_sites = [
     {
         "name": "이화이언 자유게시판",
-        "url": "https://ewhaian.com/life/66",
+        "url": "https://ewhaian.com/",
         # CSR 해결 후 가장 확실한 선택자
-        "selector": "ul.boardList li.boardItem a"
+        "selector": "ul.contentList li.contentItem a"
     }
 ]
 
@@ -109,7 +109,7 @@ def check_site(site, last_titles, session=None):
                 page.goto(site["url"], wait_until="networkidle")
                 
                 # 2. 게시글 목록이 로딩될 때까지 기다립니다.
-                page.wait_for_selector("ul.boardList", timeout=30000)
+                page.wait_for_selector("ul.contentList", timeout=30000)
                 # 3. 렌더링된 HTML을 가져옵니다.
                 soup = BeautifulSoup(page.content(), "html.parser")
                 browser.close()
