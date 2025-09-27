@@ -3,7 +3,7 @@ name: Site Monitor
 on:
   schedule:
     - cron: '*/5 * * * *'  # 5분마다 실행
-  workflow_dispatch:       # 수동 실행 버튼
+  workflow_dispatch:        # 수동 실행 버튼
 
 jobs:
   run-script:
@@ -20,7 +20,16 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          python -m pip install --upgrade pip
+          
+          # ⭐⭐⭐ 필요한 Python 라이브러리 설치 ⭐⭐⭐
+          # requests, beautifulsoup4는 기존에 사용하던 것
+          # playwright는 이화이언 CSR 해결을 위해 새로 추가
+          pip install requests beautifulsoup4 playwright
+          
+          # ⭐⭐⭐ Playwright 실행 환경 설정 ⭐⭐⭐
+          # 크롬 기반 브라우저 설치 (JavaScript 실행용)
+          playwright install chromium
 
       - name: Run script
         env:
