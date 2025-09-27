@@ -5,6 +5,8 @@ from email.mime.text import MIMEText
 import os
 import json
 from urllib.parse import urljoin
+# --- [추가] Playwright 임포트 ---
+from playwright.sync_api import sync_playwright
 
 # 이메일 정보
 FROM_EMAIL = os.environ.get("FROM_EMAIL")
@@ -17,6 +19,16 @@ USER_PW = os.environ.get("USER_PW")
 STATE_FILE = "titles.json"
 
 # 감시할 사이트 정보
+# 로그인이 필요한 사이트 (이화이언의 selector는 Playwright 사용을 고려하여 변경)
+login_required_sites = [
+    {
+        "name": "이화이언 자유게시판",
+        "url": "https://ewhaian.com/life/66",
+        # CSR 해결 후 가장 확실한 선택자
+        "selector": "li.boardItem a" 
+    }
+]
+
 # 로그인이 필요 없는 공공 사이트
 public_sites = [
     {
@@ -33,15 +45,6 @@ public_sites = [
         "name": "동아대 law 특강및 모의고사",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN059",
         "selector": "table.bdListTbl td.subject a"
-    }
-]
-
-# 로그인이 필요한 사이트
-login_required_sites = [
-    {
-        "name": "이화이언 자유게시판",
-        "url": "https://ewhaian.com/life/66",
-        "selector": "ul.boardList li.boardItem a[href^='/66/detail']"
     }
 ]
 
@@ -80,36 +83,82 @@ def login(session, login_url, login_data):
         print(f"❌ 로그인 실패: {e}")
         return False
 
+# --- [수정] check_site 함수: 이화이언은 Playwright 사용하도록 분기 ---
 def check_site(site, last_titles, session=None):
     """
-    사이트를 확인합니다. 세션이 필요한 경우 세션 객체를 사용합니다.
+    사이트를 확인합니다. 이화이언은 Playwright를 사용하며, 나머지 사이트는 requests를 사용합니다.
     """
-    try:
-        if session:
-            response = session.get(site["url"])
-        else:
-            response = requests.get(site["url"])
+    soup = None
+
+    # 이화이언 사이트이며, 로그인 세션이 있는 경우 Playwright를 사용하여 CSR 문제를 해결합니다.
+    if session and site["name"] == "이화이언 자유게시판":
+        print(f"🔍 [{site['name']}] Playwright로 로그인 세션 유지 후 접속 시도")
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context()
+                
+                # 1. requests 세션의 쿠키를 Playwright로 옮겨서 로그인 상태를 유지
+                cookies = [
+                    {'name': c.name, 'value': c.value, 'url': site["url"]} 
+                    for c in session.cookies
+                ]
+                context.add_cookies(cookies)
+
+                page = context.new_page()
+                page.goto(site["url"], wait_until="networkidle")
+                
+                # 2. 게시글 목록이 로딩될 때까지 기다립니다.
+                page.wait_for_selector(site["selector"], timeout=20000)
+                
+                # 3. 렌더링된 HTML을 가져옵니다.
+                soup = BeautifulSoup(page.content(), "html.parser")
+                browser.close()
+
+        except Exception as e:
+            print(f"❌ [{site['name']}] Playwright 크롤링 오류: {e}")
             
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
-        post_tag = soup.select_one(site["selector"])
-
-        if post_tag:
-            title = post_tag.text.strip()
-            # href는 javascript:goDetail() 이므로 링크 추출 로직을 생략합니다.
-            last_title = last_titles.get(site["name"])
-
-            if last_title != title:
-                print(f"🆕 [{site['name']}] 새 글 발견: {title}")
-                body = f"새 글이 등록되었습니다!\n\n[{site['name']}]\n제목: {title}"
-                send_email(f"[새 글 알림] {site['name']}", body)
-                last_titles[site["name"]] = title
+            
+    # 그 외 모든 사이트 (requests 기반)
+    else:
+        try:
+            if session:
+                response = session.get(site["url"])
             else:
-                print(f"🔁 [{site['name']}] 변화 없음: {title}")
+                response = requests.get(site["url"])
+                
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, "html.parser")
+            
+        except Exception as e:
+            print(f"❌ [{site['name']}] requests 접속 오류: {e}")
+            return
+
+    # --- 게시글 추출 및 비교 로직 ---
+    if soup is None:
+        print(f"⚠️ [{site['name']}] HTML 내용을 가져오지 못했습니다.")
+        return
+        
+    post_tag = soup.select_one(site["selector"])
+    
+    if post_tag:
+        title = post_tag.text.strip()
+        
+        # href가 없을 경우를 대비하여 urljoin 대신 기본 URL을 사용
+        link = urljoin(site["url"], post_tag.get('href')) if post_tag.get('href') and not post_tag.get('href').startswith('#') else site["url"]
+        
+        last_title = last_titles.get(site["name"])
+
+        if last_title != title:
+            print(f"🆕 [{site['name']}] 새 글 발견: {title}")
+            body = f"새 글이 등록되었습니다!\n\n[{site['name']}]\n제목: {title}\n링크: {link}"
+            send_email(f"[새 글 알림] {site['name']}", body)
+            last_titles[site["name"]] = title
         else:
-            print(f"⚠️ [{site['name']}] 게시글 요소를 찾을 수 없습니다.")
-    except Exception as e:
-        print(f"❌ [{site['name']}] 오류 발생: {e}")
+            print(f"🔁 [{site['name']}] 변화 없음: {title}")
+    else:
+        print(f"⚠️ [{site['name']}] 게시글 요소를 찾을 수 없습니다.")
+
 
 def check_all_sites(session):
     last_titles = load_titles()
@@ -118,7 +167,7 @@ def check_all_sites(session):
     if session:
         for site in login_required_sites:
             check_site(site, last_titles, session)
-    
+            
     # 2. 로그인 필요 없는 사이트 확인
     for site in public_sites:
         check_site(site, last_titles)
@@ -138,5 +187,5 @@ if __name__ == "__main__":
             # 로그인 성공 시, 로그인 필요한 사이트와 공공 사이트 모두 확인
             check_all_sites(session)
         else:
-            # 로그인 실패 시, 공공 사이트만 확인
+            # 로그인 실패 시, 공공 사이트만 확인 (이화이언은 제외됨)
             check_all_sites(None)
