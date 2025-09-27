@@ -109,8 +109,7 @@ def check_site(site, last_titles, session=None):
                 page.goto(site["url"], wait_until="networkidle")
                 
                 # 2. 게시글 목록이 로딩될 때까지 기다립니다.
-                page.wait_for_selector(site["selector"], timeout=20000)
-                
+                page.wait_for_selector("ul.boardList", timeout=30000)
                 # 3. 렌더링된 HTML을 가져옵니다.
                 soup = BeautifulSoup(page.content(), "html.parser")
                 browser.close()
