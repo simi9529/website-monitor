@@ -32,16 +32,17 @@ def update_period():
     
     # **핵심: 'last_edited_time'을 기준으로 내림차순(descending) 정렬하여 
     # 최근에 수정된 페이지부터 최대 100개만 가져오도록 요청합니다.**
-    try:
+   try:
+        # **수정된 부분: notion.databases.query 호출 방식**
+        # 'database_id=' 키워드를 제거하고 ID를 첫 번째 인자로 전달합니다.
         response = notion.databases.query(
-            database_id=DATABASE_ID,
+            database_id=DATABASE_ID, # database_id= 키워드를 다시 사용하여 최신 라이브러리 방식을 따릅니다.
             sorts=[
                 {
                     "timestamp": "last_edited_time",
                     "direction": "descending"
                 }
             ],
-            # Notion API의 기본 제한에 따라 이 쿼리는 가장 최근 수정된 100개만 반환합니다.
         )
     except Exception as e:
         print(f"❌ 데이터베이스 쿼리 실패: {e}")
