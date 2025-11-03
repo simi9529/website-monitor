@@ -27,7 +27,7 @@ def parse_iso_naive(dt_str):
 
 def update_pages(pages):
     """페이지 목록을 받아 '기간' 필드 업데이트"""
-    for i, page in enumerate(pages, 1):
+    for page in pages:
         props = page.get("properties", {})
         page_id_short = page.get("id", "")[:8]
 
@@ -75,7 +75,7 @@ def update_pages(pages):
             print(f"❌ {page_id_short}... 업데이트 실패: {e}")
 
 # -------------------------------
-# 지난 14일치 페이지만 가져오기
+# 지난 14일치 페이지 전체 처리 (페이지네이션)
 # -------------------------------
 def update_recent_14days():
     fourteen_days_ago = datetime.utcnow() - timedelta(days=14)
@@ -89,20 +89,31 @@ def update_recent_14days():
         }
     }
 
-    try:
-        response = notion.databases.query(
-            database_id=DATABASE_ID,
-            sorts=[{"timestamp": "last_edited_time", "direction": "descending"}],
-            **filter_payload,
-            page_size=100
-        )
-    except Exception as e:
-        print(f"❌ 데이터베이스 쿼리 실패: {e}")
-        return
+    all_pages = []
+    has_more = True
+    start_cursor = None
 
-    pages = response.get("results", [])
-    print(f"📄 지난 14일치 {len(pages)}개 페이지 처리 중...")
-    update_pages(pages)
+    while has_more:
+        try:
+            response = notion.databases.query(
+                database_id=DATABASE_ID,
+                sorts=[{"timestamp": "last_edited_time", "direction": "descending"}],
+                **filter_payload,
+                page_size=100,
+                start_cursor=start_cursor
+            )
+        except Exception as e:
+            print(f"❌ 데이터베이스 쿼리 실패: {e}")
+            return
+
+        pages = response.get("results", [])
+        all_pages.extend(pages)
+
+        has_more = response.get("has_more", False)
+        start_cursor = response.get("next_cursor")
+
+    print(f"📄 지난 14일치 {len(all_pages)}개 페이지 처리 중...")
+    update_pages(all_pages)
 
 # -------------------------------
 # 실행
