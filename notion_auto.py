@@ -25,26 +25,21 @@ def parse_iso_naive(dt_str):
 def update_period():
     print("--- Notion 기간 자동 채우기 시작 (최근 100개만 모니터링) ---")
     
-    # 쿼리 매개변수 (정렬 방식)
-    query_payload = {
-        "sorts": [
-            {
-                "timestamp": "last_edited_time",
-                "direction": "descending"
-            }
-        ]
-    }
-    
     try:
-        # 🚨🚨🚨 수정된 부분: path를 '/'로 시작하도록 변경하여 올바른 URL을 만듭니다. 🚨🚨🚨
-        response = notion.request(
-            method="POST",
-            path=f"/databases/{DATABASE_ID}/query", # 앞에 '/' 추가
-            body=query_payload
+        # 🚨🚨🚨 핵심 수정: DATABASE_ID를 첫 번째 위치 인자로 전달 🚨🚨🚨
+        # notion.databases.query(database_id=DATABASE_ID, ...) 대신,
+        # notion.databases.query(DATABASE_ID, ...) 방식을 사용하여 오류를 우회합니다.
+        response = notion.databases.query(
+            DATABASE_ID,  # database_id= 키워드 제거
+            sorts=[
+                {
+                    "timestamp": "last_edited_time",
+                    "direction": "descending"
+                }
+            ]
         )
         
     except Exception as e:
-        # 오류 메시지를 명확하게 출력합니다.
         print(f"❌ 데이터베이스 쿼리 실패: '{e}'")
         return
 
