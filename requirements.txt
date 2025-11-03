@@ -3,3 +3,4 @@ beautifulsoup4
 schedule
 python-dotenv
 python-dateutil
+notion-client==2.0.0  
