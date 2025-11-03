@@ -25,30 +25,36 @@ def parse_iso_naive(dt_str):
 def update_period():
     print("--- Notion 기간 자동 채우기 시작 (최근 100개만 모니터링) ---")
     
+    # 🚨🚨🚨 핵심 수정 부분: notion.databases.query 대신 직접 API 요청 사용 🚨🚨🚨
+    
+    # 쿼리 매개변수 (정렬 방식)
+    query_payload = {
+        "sorts": [
+            {
+                "timestamp": "last_edited_time",
+                "direction": "descending"
+            }
+        ]
+    }
+    
     try:
-        # **수정된 부분: notion.databases.query 호출 방식**
-        # 'database_id=' 키워드를 제거하고 ID를 첫 번째 인자로 전달합니다.
-        response = notion.databases.query(
-            database_id=DATABASE_ID, # database_id= 키워드를 다시 사용하여 최신 라이브러리 방식을 따릅니다.
-            sorts=[
-                {
-                    "timestamp": "last_edited_time",
-                    "direction": "descending"
-                }
-            ],
+        # notion 객체의 'request' 메서드를 사용하여 직접 POST 요청을 보냅니다.
+        # 이 방식은 클라이언트 라이브러리 버전에 덜 의존적입니다.
+        response = notion.request(
+            method="POST",
+            path=f"databases/{DATABASE_ID}/query",
+            body=query_payload
         )
         
     except Exception as e:
-        # 오류 메시지를 명확하게 출력하여 문제점을 확인합니다.
-        # 이전처럼 키워드 인자를 사용했을 때 'DatabasesEndpoint' 오류가 발생한다면, 
-        # 이는 라이브러리 버전 문제이므로, 키워드 인자 없이 ID만 전달하는 방식으로 변경해야 합니다.
+        # 오류 메시지를 명확하게 출력합니다.
         print(f"❌ 데이터베이스 쿼리 실패: '{e}'")
         return
 
     results = response.get("results", [])
     print(f"✅ 총 {len(results)}개 페이지 가져오기 완료. (최근 수정된 100개)")
     
-    # 가져온 페이지를 순회하며 '기간' 업데이트를 시도합니다.
+    # 2. 가져온 페이지를 순회하며 '기간' 업데이트를 시도합니다.
     for page in results:
         props = page["properties"]
         page_id_short = page["id"][:8] 
@@ -70,7 +76,7 @@ def update_period():
         current_start = current_period.get("start")
         current_end = current_period.get("end")
 
-        # 5. 값이 바뀌지 않았거나, 비어있지 않다면 건너뜀
+        # 5. 값이 바뀌지 않았다면 건너
         if current_start == start_prop and current_end == end_prop:
             print(f"⏸ {page_id_short}... 건너뜀: 기간 unchanged")
             continue
