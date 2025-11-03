@@ -20,7 +20,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install notion-client
+          pip install -r requirements.txt
+          pip install notion-client==2.0.0
+
+      - name: Verify notion-client version
+        run: pip show notion-client
 
       - name: Run Notion auto script
         run: python notion_auto.py
