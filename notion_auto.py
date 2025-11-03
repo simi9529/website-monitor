@@ -47,7 +47,7 @@ def update_period():
         # Notion API의 databases.query는 POST 요청입니다.
         response = notion.request(
             method="POST",
-            path=f"/databases/{DATABASE_ID}/query",
+            path=f"databases/{DATABASE_ID}/query",
             body=query_payload
         )
         
