@@ -28,11 +28,16 @@ def parse_iso_naive(dt_str):
 def update_pages(pages):
     """페이지 목록을 받아 '기간' 필드 업데이트"""
     for i, page in enumerate(pages, 1):
-        props = page["properties"]
-        page_id_short = page["id"][:8]
+        props = page.get("properties", {})
+        page_id_short = page.get("id", "")[:8]
 
-        start_prop = props.get("시작", {}).get("date", {}).get("start")
-        end_prop = props.get("종료", {}).get("date", {}).get("start")
+        # 안전하게 start / end 가져오기
+        start_value = props.get("시작")
+        start_prop = start_value.get("date", {}).get("start") if start_value and start_value.get("date") else None
+
+        end_value = props.get("종료")
+        end_prop = end_value.get("date", {}).get("start") if end_value and end_value.get("date") else None
+
         if not start_prop or not end_prop:
             print(f"⏸ {page_id_short}... '시작' 또는 '종료' 비어 있음")
             continue
@@ -48,6 +53,7 @@ def update_pages(pages):
             end_dt = start_dt + timedelta(days=1)
             end_prop = end_dt.isoformat()
 
+        # 현재 '기간' 값
         current = props.get("기간", {}).get("date", {})
         current_start = current.get("start")
         current_end = current.get("end")
@@ -56,9 +62,10 @@ def update_pages(pages):
             print(f"⏸ {page_id_short}... 기간 unchanged")
             continue
 
+        # 업데이트 시도
         try:
             notion.pages.update(
-                page_id=page["id"],
+                page_id=page.get("id"),
                 properties={
                     "기간": {"date": {"start": start_prop, "end": end_prop}}
                 }
@@ -68,16 +75,16 @@ def update_pages(pages):
             print(f"❌ {page_id_short}... 업데이트 실패: {e}")
 
 # -------------------------------
-# 지난 7일치 페이지만 가져오기
+# 지난 14일치 페이지만 가져오기
 # -------------------------------
-def update_recent_week():
-    seven_days_ago = datetime.utcnow() - timedelta(days=7)
+def update_recent_14days():
+    fourteen_days_ago = datetime.utcnow() - timedelta(days=14)
 
     filter_payload = {
         "filter": {
             "property": "시작",
             "date": {
-                "after": seven_days_ago.isoformat()
+                "after": fourteen_days_ago.isoformat()
             }
         }
     }
@@ -94,11 +101,11 @@ def update_recent_week():
         return
 
     pages = response.get("results", [])
-    print(f"📄 지난 7일치 {len(pages)}개 페이지 처리 중...")
+    print(f"📄 지난 14일치 {len(pages)}개 페이지 처리 중...")
     update_pages(pages)
 
 # -------------------------------
 # 실행
 # -------------------------------
 if __name__ == "__main__":
-    update_recent_week()
+    update_recent_14days()
