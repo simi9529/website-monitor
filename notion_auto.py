@@ -1,6 +1,6 @@
 import os
 from notion_client import Client
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 # 🔑 환경 변수에서 Notion API 키와 DB ID 가져오기
 notion = Client(auth=os.environ["NOTION_API_KEY"])
@@ -75,16 +75,21 @@ def update_pages(pages):
             print(f"❌ {page_id_short}... 업데이트 실패: {e}")
 
 # -------------------------------
-# 지난 14일치 페이지 전체 처리 (페이지네이션)
+# 특정 날짜 페이지 전체 처리 (페이지네이션)
 # -------------------------------
-def update_recent_14days():
-    fourteen_days_ago = datetime.utcnow() - timedelta(days=14)
+def update_specific_day(target_date_str="2025-10-24"):
+    """
+    target_date_str: 'YYYY-MM-DD' 형식
+    """
+    start_of_day = f"{target_date_str}T00:00:00.000Z"
+    end_of_day = f"{target_date_str}T23:59:59.999Z"
 
     filter_payload = {
         "filter": {
             "property": "시작",
             "date": {
-                "after": fourteen_days_ago.isoformat()
+                "on_or_after": start_of_day,
+                "on_or_before": end_of_day
             }
         }
     }
@@ -94,17 +99,13 @@ def update_recent_14days():
     start_cursor = None
 
     while has_more:
-        try:
-            response = notion.databases.query(
-                database_id=DATABASE_ID,
-                sorts=[{"timestamp": "last_edited_time", "direction": "descending"}],
-                **filter_payload,
-                page_size=100,
-                start_cursor=start_cursor
-            )
-        except Exception as e:
-            print(f"❌ 데이터베이스 쿼리 실패: {e}")
-            return
+        response = notion.databases.query(
+            database_id=DATABASE_ID,
+            sorts=[{"timestamp": "last_edited_time", "direction": "descending"}],
+            **filter_payload,
+            page_size=100,
+            start_cursor=start_cursor
+        )
 
         pages = response.get("results", [])
         all_pages.extend(pages)
@@ -112,11 +113,12 @@ def update_recent_14days():
         has_more = response.get("has_more", False)
         start_cursor = response.get("next_cursor")
 
-    print(f"📄 지난 14일치 {len(all_pages)}개 페이지 처리 중...")
+    print(f"📄 {target_date_str} 날짜의 {len(all_pages)}개 페이지 처리 중...")
     update_pages(all_pages)
 
 # -------------------------------
 # 실행
 # -------------------------------
 if __name__ == "__main__":
-    update_recent_14days()
+    # 원하는 날짜 지정
+    update_specific_day("2025-10-24")
