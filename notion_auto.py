@@ -25,8 +25,6 @@ def parse_iso_naive(dt_str):
 def update_period():
     print("--- Notion 기간 자동 채우기 시작 (최근 100개만 모니터링) ---")
     
-    # 🚨🚨🚨 핵심 수정 부분: notion.databases.query 대신 직접 API 요청 사용 🚨🚨🚨
-    
     # 쿼리 매개변수 (정렬 방식)
     query_payload = {
         "sorts": [
@@ -38,11 +36,10 @@ def update_period():
     }
     
     try:
-        # notion 객체의 'request' 메서드를 사용하여 직접 POST 요청을 보냅니다.
-        # 이 방식은 클라이언트 라이브러리 버전에 덜 의존적입니다.
+        # 🚨🚨🚨 수정된 부분: path를 '/'로 시작하도록 변경하여 올바른 URL을 만듭니다. 🚨🚨🚨
         response = notion.request(
             method="POST",
-            path=f"databases/{DATABASE_ID}/query",
+            path=f"/databases/{DATABASE_ID}/query", # 앞에 '/' 추가
             body=query_payload
         )
         
@@ -76,7 +73,7 @@ def update_period():
         current_start = current_period.get("start")
         current_end = current_period.get("end")
 
-        # 5. 값이 바뀌지 않았다면 건너
+        # 5. 값이 바뀌지 않았다면 건너뜀
         if current_start == start_prop and current_end == end_prop:
             print(f"⏸ {page_id_short}... 건너뜀: 기간 unchanged")
             continue
