@@ -1,6 +1,6 @@
 import os
 from notion_client import Client
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # 🔑 환경 변수에서 Notion API 키와 DB ID 가져오기
 notion = Client(auth=os.environ["NOTION_API_KEY"])
@@ -53,10 +53,10 @@ def update_pages(pages):
             end_dt = start_dt + timedelta(days=1)
             end_prop = end_dt.isoformat()
 
-        # 현재 '기간' 값
-        current = props.get("기간", {}).get("date", {})
-        current_start = current.get("start")
-        current_end = current.get("end")
+        # 현재 '기간' 값 안전하게 가져오기
+        current_date = props.get("기간", {}).get("date")
+        current_start = current_date.get("start") if current_date else None
+        current_end = current_date.get("end") if current_date else None
 
         if current_start == start_prop and current_end == end_prop:
             print(f"⏸ {page_id_short}... 기간 unchanged")
