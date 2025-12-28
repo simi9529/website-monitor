@@ -75,3 +75,27 @@ def update_pages(pages):
             print(f"✅ {page_id_short}... 업데이트: {start_prop} ~ {end_prop}")
         except Exception as e:
             print(f"❌ {page_id_short}... 업데이트 실패: {e}")
+
+# -------------------------------
+# 최근 1000개 자동 처리
+# -------------------------------
+def update_recent_1000():
+    try:
+        response = notion.databases.query(
+            database_id=DATABASE_ID,
+            sorts=[{"timestamp": "last_edited_time", "direction": "descending"}],
+            page_size=1000
+        )
+    except Exception as e:
+        print(f"❌ 데이터베이스 쿼리 실패: {e}")
+        return
+
+    pages = response.get("results", [])
+    print(f"📄 최근 1000개 페이지 처리 중...")
+    update_pages(pages)
+
+# -------------------------------
+# 실행
+# -------------------------------
+if __name__ == "__main__":
+    update_recent_1000()
