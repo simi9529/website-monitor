@@ -79,11 +79,11 @@ def update_pages(pages):
 # -------------------------------
 # 최근 1,000개(또는 그 이상) 자동 처리
 # -------------------------------
-def update_recent_1000():
+def update_recent_4000():
     all_pages = []
     has_more = True
     next_cursor = None
-    target_count = 1000  # 목표 개수 설정
+    target_count = 4000  # 목표 개수 설정
 
     try:
         print(f"📄 데이터를 가져오는 중...")
@@ -119,4 +119,4 @@ def update_recent_1000():
 # 실행
 # -------------------------------
 if __name__ == "__main__":
-    update_recent_1000()
+    update_recent_4000()
