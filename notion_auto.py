@@ -77,46 +77,25 @@ def update_pages(pages):
             print(f"❌ {page_id_short}... 업데이트 실패: {e}")
 
 # -------------------------------
-# 최근 1,000개(또는 그 이상) 자동 처리
+# 최근 100개 자동 처리
 # -------------------------------
-def update_recent_10000():
-    all_pages = []
-    has_more = True
-    next_cursor = None
-    target_count = 10000  # 목표 개수 설정
-
+def update_recent_100():
     try:
-        print(f"📄 데이터를 가져오는 중...")
-        
-        while has_more and len(all_pages) < target_count:
-            # 쿼리 실행
-            response = notion.databases.query(
-                database_id=DATABASE_ID,
-                sorts=[{"timestamp": "last_edited_time", "direction": "descending"}],
-                page_size=100,  # 한 번에 가져오는 최대치는 100
-                start_cursor=next_cursor  # 다음 데이터의 시작점 지정
-            )
-            
-            pages = response.get("results", [])
-            all_pages.extend(pages)
-            
-            # 다음 페이지가 있는지 확인
-            has_more = response.get("has_more")
-            next_cursor = response.get("next_cursor")
-            
-            print(f"✅ 현재까지 {len(all_pages)}개 수집 완료...")
-
-        # 수집된 페이지들 처리
-        # 만약 정확히 1000개만 하고 싶다면 슬라이싱 사용
-        pages_to_update = all_pages[:target_count]
-        print(f"🚀 총 {len(pages_to_update)}개 페이지 수정 시작!")
-        update_pages(pages_to_update)
-
+        response = notion.databases.query(
+            database_id=DATABASE_ID,
+            sorts=[{"timestamp": "last_edited_time", "direction": "descending"}],
+            page_size=100
+        )
     except Exception as e:
-        print(f"❌ 오류 발생: {e}")
+        print(f"❌ 데이터베이스 쿼리 실패: {e}")
+        return
+
+    pages = response.get("results", [])
+    print(f"📄 최근 100개 페이지 처리 중...")
+    update_pages(pages)
 
 # -------------------------------
 # 실행
 # -------------------------------
 if __name__ == "__main__":
-    update_recent_10000()
+    update_recent_100()
