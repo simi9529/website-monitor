@@ -79,12 +79,12 @@ def update_pages(pages):
 # -------------------------------
 # 최근 100개 자동 처리
 # -------------------------------
-def update_recent_100():
+def update_recent_1000():
     try:
         response = notion.databases.query(
             database_id=DATABASE_ID,
             sorts=[{"timestamp": "last_edited_time", "direction": "descending"}],
-            page_size=100
+            page_size=1000
         )
     except Exception as e:
         print(f"❌ 데이터베이스 쿼리 실패: {e}")
@@ -98,4 +98,4 @@ def update_recent_100():
 # 실행
 # -------------------------------
 if __name__ == "__main__":
-    update_recent_100()
+    update_recent_1000()
