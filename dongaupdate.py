@@ -8,7 +8,7 @@ from urllib.parse import urljoin
 from playwright.sync_api import sync_playwright
 
 # =====================
-# 이메일 / 로그인 정보
+# 환경 변수
 # =====================
 FROM_EMAIL = os.environ.get("FROM_EMAIL")
 TO_EMAIL = os.environ.get("TO_EMAIL")
@@ -16,7 +16,6 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD")
 USER_ID = os.environ.get("USER_ID")
 USER_PW = os.environ.get("USER_PW")
 
-# 상태 저장 파일
 STATE_FILE = "titles.json"
 
 # =====================
@@ -26,7 +25,6 @@ login_required_sites = [
     {
         "name": "이화이언 자유게시판",
         "url": "https://ewhaian.com/",
-        "selector": "ul.contentList li.contentItem a"
     }
 ]
 
@@ -34,32 +32,29 @@ public_sites = [
     {
         "name": "동아대 law 학사공지",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN056",
-        "selector": "table.bdListTbl td.subject a"
     },
     {
         "name": "동아대 law 수업공지",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN057",
-        "selector": "table.bdListTbl td.subject a"
     },
     {
         "name": "동아대 law 특강및 모의고사",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN059",
-        "selector": "table.bdListTbl td.subject a"
     }
 ]
 
 # =====================
-# 유틸 함수
+# 유틸
 # =====================
-def load_titles():
+def load_state():
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
-def save_titles(data):
+def save_state(state):
     with open(STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(state, f, ensure_ascii=False, indent=2)
 
 def send_email(subject, body):
     msg = MIMEText(body)
@@ -67,144 +62,129 @@ def send_email(subject, body):
     msg["From"] = FROM_EMAIL
     msg["To"] = TO_EMAIL
 
-    try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(FROM_EMAIL, APP_PASSWORD)
-            server.send_message(msg)
-            print(f"✅ 이메일 발송: {subject}")
-    except Exception as e:
-        print(f"❌ 이메일 발송 실패: {e}")
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(FROM_EMAIL, APP_PASSWORD)
+        server.send_message(msg)
 
-def login(session, url, data):
-    try:
-        res = session.post(url, data=data)
-        res.raise_for_status()
-        print("✅ 로그인 성공")
-        return True
-    except Exception as e:
-        print(f"❌ 로그인 실패: {e}")
-        return False
+def login(session):
+    url = "https://ewhaian.com/login"
+    data = {"username": USER_ID, "password": USER_PW}
+    res = session.post(url, data=data)
+    res.raise_for_status()
 
 # =====================
-# 핵심 감시 함수
+# 게시판 감시 (동아대)
 # =====================
-def check_site(site, last_state, session=None):
-    soup = None
+def check_donga_board(site, state):
+    res = requests.get(site["url"])
+    res.raise_for_status()
+    soup = BeautifulSoup(res.text, "html.parser")
 
-    # --- 이화이언 (Playwright) ---
-    if session and site["name"] == "이화이언 자유게시판":
-        try:
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                context = browser.new_context()
+    rows = soup.select("table.bdListTbl tbody tr")
 
-                cookies = [
-                    {"name": c.name, "value": c.value, "url": site["url"]}
-                    for c in session.cookies
-                ]
-                context.add_cookies(cookies)
+    latest_display_num = None
+    latest_board_seq = None
+    latest_title = None
+    latest_link = None
 
-                page = context.new_page()
-                page.goto(site["url"], wait_until="networkidle")
-                page.wait_for_selector("ul.contentList", timeout=30000)
+    for row in rows:
+        num_td = row.select_one("td.num")
+        subject_a = row.select_one("td.subject a")
 
-                soup = BeautifulSoup(page.content(), "html.parser")
-                browser.close()
+        if not num_td or not subject_a:
+            continue
 
-        except Exception as e:
-            print(f"❌ [{site['name']}] Playwright 오류: {e}")
-            return
+        num_text = num_td.text.strip()
 
-    # --- 일반 사이트 (requests) ---
-    else:
-        try:
-            res = session.get(site["url"]) if session else requests.get(site["url"])
-            res.raise_for_status()
-            soup = BeautifulSoup(res.text, "html.parser")
-        except Exception as e:
-            print(f"❌ [{site['name']}] 접속 오류: {e}")
-            return
+        # ✅ 공지 제외: 숫자만
+        if not num_text.isdigit():
+            continue
 
-    if soup is None:
+        href = subject_a.get("href", "")
+        if "board_seq=" not in href:
+            continue
+
+        latest_display_num = num_text
+        latest_board_seq = href.split("board_seq=")[-1]
+        latest_title = subject_a.text.strip()
+        latest_link = urljoin(site["url"], href)
+        break
+
+    if not latest_board_seq:
+        print(f"⚠️ [{site['name']}] 일반글 미검출")
         return
 
-# 게시글 번호(board_seq) 기준 감지 (공지글 완전 제외)
-# =====================
-rows = soup.select("table.bdListTbl tbody tr")
+    last_seq = state.get(site["name"])
 
-latest_post_id = None
-latest_title = None
-latest_link = None
-latest_display_num = None
-
-for row in rows:
-    num_td = row.select_one("td.num")
-    subject_a = row.select_one("td.subject a")
-
-    if not num_td or not subject_a:
-        continue
-
-    num_text = num_td.text.strip()
-
-    # ✅ 공지글 제외: 숫자인 경우만 통과
-    if not num_text.isdigit():
-        continue
-
-    href = subject_a.get("href", "")
-    if "board_seq=" not in href:
-        continue
-
-    latest_display_num = num_text          # 화면에 보이는 499
-    latest_post_id = href.split("board_seq=")[-1]  # DB 번호
-    latest_title = subject_a.text.strip()
-    latest_link = urljoin(site["url"], href)
-    break   # 🔥 가장 위의 일반글 1개만
-
-if not latest_post_id:
-    print(f"⚠️ [{site['name']}] 일반 게시글을 찾지 못했습니다.")
-    return
-
-last_id = last_state.get(site["name"])
-
-if last_id != latest_post_id:
-    print(f"🆕 [{site['name']}] 새 글 감지 (번호 {latest_display_num})")
-    body = (
-        f"새 글이 등록되었습니다.\n\n"
-        f"[{site['name']}]\n"
-        f"게시판 번호: {latest_display_num}\n"
-        f"제목: {latest_title}\n"
-        f"board_seq: {latest_post_id}\n"
-        f"링크: {latest_link}"
-    )
-    send_email(f"[새 글 알림] {site['name']}", body)
-    last_state[site["name"]] = latest_post_id
-else:
-    print(f"🔁 [{site['name']}] 변화 없음 ({latest_display_num})")
+    if last_seq != latest_board_seq:
+        body = (
+            f"[{site['name']}]\n"
+            f"게시판 번호: {latest_display_num}\n"
+            f"제목: {latest_title}\n"
+            f"링크: {latest_link}"
+        )
+        send_email(f"[새 글 알림] {site['name']}", body)
+        state[site["name"]] = latest_board_seq
+        print(f"🆕 [{site['name']}] 새 글 감지 ({latest_display_num})")
+    else:
+        print(f"🔁 [{site['name']}] 변화 없음")
 
 # =====================
-# 전체 실행
+# 이화이언 (Playwright)
 # =====================
-def check_all_sites(session):
-    last_state = load_titles()
+def check_ewhaian(session, state):
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context()
 
-    if session:
-        for site in login_required_sites:
-            check_site(site, last_state, session)
+        cookies = [
+            {"name": c.name, "value": c.value, "url": "https://ewhaian.com/"}
+            for c in session.cookies
+        ]
+        context.add_cookies(cookies)
+
+        page = context.new_page()
+        page.goto("https://ewhaian.com/", wait_until="networkidle")
+        page.wait_for_selector("ul.contentList", timeout=30000)
+
+        soup = BeautifulSoup(page.content(), "html.parser")
+        browser.close()
+
+    post = soup.select_one("ul.contentList li.contentItem a")
+    if not post:
+        return
+
+    title = post.text.strip()
+    href = post.get("href", "")
+    link = urljoin("https://ewhaian.com/", href)
+
+    last_title = state.get("이화이언 자유게시판")
+
+    if last_title != title:
+        body = f"[이화이언 자유게시판]\n제목: {title}\n링크: {link}"
+        send_email("[새 글 알림] 이화이언 자유게시판", body)
+        state["이화이언 자유게시판"] = title
+        print("🆕 [이화이언] 새 글")
+    else:
+        print("🔁 [이화이언] 변화 없음")
+
+# =====================
+# 메인 실행
+# =====================
+def main():
+    state = load_state()
 
     for site in public_sites:
-        check_site(site, last_state)
-
-    save_titles(last_state)
-
-if __name__ == "__main__":
-    login_url = "https://ewhaian.com/login"
-    login_data = {
-        "username": USER_ID,
-        "password": USER_PW
-    }
+        check_donga_board(site, state)
 
     with requests.Session() as session:
-        if login(session, login_url, login_data):
-            check_all_sites(session)
-        else:
-            check_all_sites(None)
+        try:
+            login(session)
+            check_ewhaian(session, state)
+        except Exception:
+            print("⚠️ 이화이언 로그인/크롤링 실패")
+
+    save_state(state)
+
+if __name__ == "__main__":
+    main()
