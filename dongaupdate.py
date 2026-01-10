@@ -19,16 +19,9 @@ USER_PW = os.environ.get("USER_PW")
 STATE_FILE = "titles.json"
 
 # =====================
-# 사이트 설정
+# 감시 대상 사이트
 # =====================
-login_required_sites = [
-    {
-        "name": "이화이언 자유게시판",
-        "url": "https://ewhaian.com/",
-    }
-]
-
-public_sites = [
+DONGA_BOARDS = [
     {
         "name": "동아대 law 학사공지",
         "url": "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN056",
@@ -43,8 +36,11 @@ public_sites = [
     }
 ]
 
+EWHAIAN_URL = "https://ewhaian.com/"
+EWHAIAN_LOGIN_URL = "https://ewhaian.com/login"
+
 # =====================
-# 유틸
+# 공통 유틸
 # =====================
 def load_state():
     if os.path.exists(STATE_FILE):
@@ -66,17 +62,11 @@ def send_email(subject, body):
         server.login(FROM_EMAIL, APP_PASSWORD)
         server.send_message(msg)
 
-def login(session):
-    url = "https://ewhaian.com/login"
-    data = {"username": USER_ID, "password": USER_PW}
-    res = session.post(url, data=data)
-    res.raise_for_status()
-
 # =====================
-# 게시판 감시 (동아대)
+# 동아대 게시판 감시
 # =====================
-def check_donga_board(site, state):
-    res = requests.get(site["url"])
+def check_donga_board(board, state):
+    res = requests.get(board["url"], timeout=20)
     res.raise_for_status()
     soup = BeautifulSoup(res.text, "html.parser")
 
@@ -96,7 +86,7 @@ def check_donga_board(site, state):
 
         num_text = num_td.text.strip()
 
-        # ✅ 공지 제외: 숫자만
+        # 공지글 제외 (숫자만 통과)
         if not num_text.isdigit():
             continue
 
@@ -107,82 +97,94 @@ def check_donga_board(site, state):
         latest_display_num = num_text
         latest_board_seq = href.split("board_seq=")[-1]
         latest_title = subject_a.text.strip()
-        latest_link = urljoin(site["url"], href)
+        latest_link = urljoin(board["url"], href)
         break
 
     if not latest_board_seq:
-        print(f"⚠️ [{site['name']}] 일반글 미검출")
+        print(f"⚠️ [{board['name']}] 일반글 미검출")
         return
 
-    last_seq = state.get(site["name"])
+    last_seq = state.get(board["name"])
 
     if last_seq != latest_board_seq:
         body = (
-            f"[{site['name']}]\n"
+            f"[{board['name']}]\n"
             f"게시판 번호: {latest_display_num}\n"
             f"제목: {latest_title}\n"
             f"링크: {latest_link}"
         )
-        send_email(f"[새 글 알림] {site['name']}", body)
-        state[site["name"]] = latest_board_seq
-        print(f"🆕 [{site['name']}] 새 글 감지 ({latest_display_num})")
+        send_email(f"[새 글 알림] {board['name']}", body)
+        state[board["name"]] = latest_board_seq
+        print(f"🆕 [{board['name']}] 새 글 ({latest_display_num})")
     else:
-        print(f"🔁 [{site['name']}] 변화 없음")
+        print(f"🔁 [{board['name']}] 변화 없음")
 
 # =====================
-# 이화이언 (Playwright)
+# 이화이언 로그인 + 최신글 감시
 # =====================
-def check_ewhaian(session, state):
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
+def check_ewhaian(state):
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context()
+            page = context.new_page()
 
-        cookies = [
-            {"name": c.name, "value": c.value, "url": "https://ewhaian.com/"}
-            for c in session.cookies
-        ]
-        context.add_cookies(cookies)
+            # 로그인
+            page.goto(EWHAIAN_LOGIN_URL, wait_until="networkidle")
+            page.fill('input[name="username"]', USER_ID)
+            page.fill('input[name="password"]', USER_PW)
+            page.click('button[type="submit"]')
+            page.wait_for_load_state("networkidle", timeout=30000)
 
-        page = context.new_page()
-        page.goto("https://ewhaian.com/", wait_until="networkidle")
-        page.wait_for_selector("ul.contentList", timeout=30000)
+            # 메인 이동
+            page.goto(EWHAIAN_URL, wait_until="networkidle")
+            page.wait_for_selector("ul.contentList li.contentItem", timeout=30000)
 
-        soup = BeautifulSoup(page.content(), "html.parser")
-        browser.close()
+            soup = BeautifulSoup(page.content(), "html.parser")
+            browser.close()
 
-    post = soup.select_one("ul.contentList li.contentItem a")
-    if not post:
-        return
+        item = soup.select_one("ul.contentList li.contentItem")
+        if not item:
+            print("⚠️ [이화이언] 최신글 없음")
+            return
 
-    title = post.text.strip()
-    href = post.get("href", "")
-    link = urljoin("https://ewhaian.com/", href)
+        title_tag = item.select_one("p.listTitle")
+        link_tag = item.select_one("a")
 
-    last_title = state.get("이화이언 자유게시판")
+        if not title_tag or not link_tag:
+            print("⚠️ [이화이언] 파싱 실패")
+            return
 
-    if last_title != title:
-        body = f"[이화이언 자유게시판]\n제목: {title}\n링크: {link}"
-        send_email("[새 글 알림] 이화이언 자유게시판", body)
-        state["이화이언 자유게시판"] = title
-        print("🆕 [이화이언] 새 글")
-    else:
-        print("🔁 [이화이언] 변화 없음")
+        title = title_tag.text.strip()
+        link = urljoin(EWHAIAN_URL, link_tag.get("href"))
+
+        last_title = state.get("이화이언")
+
+        if last_title != title:
+            body = (
+                "[이화이언 최신글]\n"
+                f"제목: {title}\n"
+                f"링크: {link}"
+            )
+            send_email("[새 글 알림] 이화이언", body)
+            state["이화이언"] = title
+            print("🆕 [이화이언] 새 글")
+        else:
+            print("🔁 [이화이언] 변화 없음")
+
+    except Exception as e:
+        print(f"❌ [이화이언] 로그인/크롤링 실패: {e}")
 
 # =====================
-# 메인 실행
+# 메인
 # =====================
 def main():
     state = load_state()
 
-    for site in public_sites:
-        check_donga_board(site, state)
+    for board in DONGA_BOARDS:
+        check_donga_board(board, state)
 
-    with requests.Session() as session:
-        try:
-            login(session)
-            check_ewhaian(session, state)
-        except Exception:
-            print("⚠️ 이화이언 로그인/크롤링 실패")
+    check_ewhaian(state)
 
     save_state(state)
 
