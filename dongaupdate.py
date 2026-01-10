@@ -110,7 +110,7 @@ def check_ewhaian(state):
         browser.close()
 
     # 최신글 추출
-    first = soup.select_one("a[href*='/detail/'] p.listTitle")
+    first = soup.select_one("a[href*='/detail/'] p.listTitle title-sm")
     if not first:
         print("❌ 최신글 못 찾음")
         return
