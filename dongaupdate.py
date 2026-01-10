@@ -3,7 +3,7 @@ import json
 import smtplib
 from email.mime.text import MIMEText
 from urllib.parse import urljoin
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError
 from bs4 import BeautifulSoup
 
 # =====================
@@ -20,12 +20,10 @@ STATE_FILE = "ewhaian_state.json"
 
 BASE_URL = "https://ewhaian.com"
 LOGIN_URL = "https://ewhaian.com/login"
-
-# 알바정보 게시판 (네가 HTML 보여준 곳)
 BOARD_URL = "https://ewhaian.com/life/66"
 
 # =====================
-# 상태 관리
+# 상태
 # =====================
 def load_state():
     if os.path.exists(STATE_FILE):
@@ -51,7 +49,7 @@ def send_email(subject, body):
         server.send_message(msg)
 
 # =====================
-# 이화이언 체크
+# 이화이언
 # =====================
 def check_ewhaian(state):
     with sync_playwright() as p:
@@ -67,26 +65,31 @@ def check_ewhaian(state):
         page.fill("input#id", EWHAIAN_ID)
         page.fill("input#password", EWHAIAN_PW)
         page.click('button:has-text("로그인")')
-
         page.wait_for_load_state("networkidle", timeout=30000)
 
-        # 2️⃣ 게시판으로 직접 이동
+        # 2️⃣ 게시판 이동
         page.goto(BOARD_URL, wait_until="networkidle")
 
-        # 3️⃣ 최신글 대기
-        page.wait_for_selector("ul.contentList li.contentItem", timeout=30000)
+        # 3️⃣ 🔥 팝업 닫기 시도 (있으면 닫고, 없으면 무시)
+        try:
+            page.click('button:has-text("닫기")', timeout=5000)
+        except TimeoutError:
+            pass
+
+        # 4️⃣ 최신글 DOM "존재"만 대기 (visible ❌)
+        page.wait_for_selector("p.listTitle", state="attached", timeout=30000)
 
         soup = BeautifulSoup(page.content(), "html.parser")
         browser.close()
 
-    # 4️⃣ 최신글 추출
-    item = soup.select_one("ul.contentList li.contentItem")
-    if not item:
-        print("⚠️ [이화이언] 게시글 없음")
+    # 5️⃣ 최신글 추출
+    title_tag = soup.select_one("a[href*='/detail/'] p.listTitle")
+    if not title_tag:
+        print("⚠️ [이화이언] 게시글을 찾지 못함")
         return
 
-    title = item.select_one("p.listTitle").text.strip()
-    link = urljoin(BASE_URL, item.select_one("a")["href"])
+    title = title_tag.text.strip()
+    link = urljoin(BASE_URL, title_tag.find_parent("a")["href"])
 
     last_title = state.get("latest_title")
 
