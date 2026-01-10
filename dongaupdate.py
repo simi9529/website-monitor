@@ -21,6 +21,9 @@ STATE_FILE = "ewhaian_state.json"
 BASE_URL = "https://ewhaian.com"
 LOGIN_URL = "https://ewhaian.com/login"
 
+# 알바정보 게시판 (네가 HTML 보여준 곳)
+BOARD_URL = "https://ewhaian.com/life/66"
+
 # =====================
 # 상태 관리
 # =====================
@@ -56,36 +59,30 @@ def check_ewhaian(state):
         context = browser.new_context()
         page = context.new_page()
 
-        # 1️⃣ 로그인 페이지
+        # 1️⃣ 로그인
         page.goto(LOGIN_URL, wait_until="networkidle")
-
-        # 2️⃣ 입력창 대기
         page.wait_for_selector("input#id", timeout=30000)
         page.wait_for_selector("input#password", timeout=30000)
 
-        # 3️⃣ 로그인 입력
         page.fill("input#id", EWHAIAN_ID)
         page.fill("input#password", EWHAIAN_PW)
-
-        # 4️⃣ 로그인 클릭
         page.click('button:has-text("로그인")')
 
-        # 5️⃣ 로그인 완료 대기
         page.wait_for_load_state("networkidle", timeout=30000)
 
-        # 6️⃣ 메인 페이지
-        page.goto(BASE_URL, wait_until="networkidle")
+        # 2️⃣ 게시판으로 직접 이동
+        page.goto(BOARD_URL, wait_until="networkidle")
 
-        # 7️⃣ 최신글 로딩 대기
+        # 3️⃣ 최신글 대기
         page.wait_for_selector("ul.contentList li.contentItem", timeout=30000)
 
         soup = BeautifulSoup(page.content(), "html.parser")
         browser.close()
 
-    # 8️⃣ 최신글 추출
+    # 4️⃣ 최신글 추출
     item = soup.select_one("ul.contentList li.contentItem")
     if not item:
-        print("⚠️ [이화이언] 최신글을 찾지 못함")
+        print("⚠️ [이화이언] 게시글 없음")
         return
 
     title = item.select_one("p.listTitle").text.strip()
@@ -95,7 +92,7 @@ def check_ewhaian(state):
 
     if last_title != title:
         send_email(
-            "[이화이언 새 글 알림]",
+            "[이화이언 알바정보 새 글]",
             f"제목: {title}\n\n링크: {link}"
         )
         state["latest_title"] = title
