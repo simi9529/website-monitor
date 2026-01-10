@@ -128,9 +128,8 @@ def check_site(site, last_state, session=None):
     if soup is None:
         return
 
-    # =====================
-    # 게시글 번호(board_seq) 기준 감지
-    # =====================
+# 게시글 번호(board_seq) 기준 감지 (공지글 완전 제외)
+# =====================
 rows = soup.select("table.bdListTbl tbody tr")
 
 latest_post_id = None
