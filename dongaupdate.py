@@ -1,29 +1,29 @@
 import os
 import json
+import time
 import smtplib
 from email.mime.text import MIMEText
 from urllib.parse import urljoin
-from playwright.sync_api import sync_playwright, TimeoutError
+from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 
 # =====================
 # 환경 변수
 # =====================
-FROM_EMAIL = os.environ.get("FROM_EMAIL")
-TO_EMAIL = os.environ.get("TO_EMAIL")
-APP_PASSWORD = os.environ.get("APP_PASSWORD")
+FROM_EMAIL = os.environ["FROM_EMAIL"]
+TO_EMAIL = os.environ["TO_EMAIL"]
+APP_PASSWORD = os.environ["APP_PASSWORD"]
 
-EWHAIAN_ID = os.environ.get("USER_ID")
-EWHAIAN_PW = os.environ.get("USER_PW")
+EWHAIAN_ID = os.environ["USER_ID"]
+EWHAIAN_PW = os.environ["USER_PW"]
 
 STATE_FILE = "ewhaian_state.json"
 
-BASE_URL = "https://ewhaian.com"
 LOGIN_URL = "https://ewhaian.com/login"
 BOARD_URL = "https://ewhaian.com/life/66"
 
 # =====================
-# 상태
+# 상태 저장
 # =====================
 def load_state():
     if os.path.exists(STATE_FILE):
@@ -49,7 +49,31 @@ def send_email(subject, body):
         server.send_message(msg)
 
 # =====================
-# 이화이언
+# 🔥 팝업 닫기 (핵심)
+# =====================
+def close_popup(page):
+    popup_selectors = [
+        'button:has-text("닫기")',
+        'button:has-text("오늘")',
+        'button[aria-label="close"]',
+        'svg[role="img"]',
+    ]
+
+    for _ in range(5):
+        for sel in popup_selectors:
+            try:
+                page.click(sel, timeout=2000, force=True)
+                page.wait_for_timeout(500)
+                print("✅ 팝업 닫음")
+                return
+            except:
+                pass
+        time.sleep(1)
+
+    print("⚠️ 팝업 못 찾았지만 진행")
+
+# =====================
+# 이화이언 체크
 # =====================
 def check_ewhaian(state):
     with sync_playwright() as p:
@@ -57,59 +81,63 @@ def check_ewhaian(state):
         context = browser.new_context()
         page = context.new_page()
 
-        # 1️⃣ 로그인
-        page.goto(LOGIN_URL, wait_until="networkidle")
-        page.wait_for_selector("input#id", timeout=30000)
-        page.wait_for_selector("input#password", timeout=30000)
-
-        page.fill("input#id", EWHAIAN_ID)
-        page.fill("input#password", EWHAIAN_PW)
+        # 로그인
+        page.goto(LOGIN_URL, wait_until="domcontentloaded")
+        page.fill("#id", EWHAIAN_ID)
+        page.fill("#password", EWHAIAN_PW)
         page.click('button:has-text("로그인")')
-        page.wait_for_load_state("networkidle", timeout=30000)
 
-        # 2️⃣ 게시판 이동
-        page.goto(BOARD_URL, wait_until="networkidle")
+        # 로그인 완료 대기
+        page.wait_for_timeout(3000)
 
-        # 3️⃣ 🔥 팝업 닫기 시도 (있으면 닫고, 없으면 무시)
-        try:
-            page.click('button:has-text("닫기")', timeout=5000)
-        except TimeoutError:
-            pass
+        # 🔥 팝업 반드시 닫기
+        close_popup(page)
 
-        # 4️⃣ 최신글 DOM "존재"만 대기 (visible ❌)
-        page.wait_for_selector("p.listTitle", state="attached", timeout=30000)
+        # 게시판 이동
+        page.goto(BOARD_URL, wait_until="domcontentloaded")
+
+        # 🔥 React 렌더 대기 (DOM 폴링)
+        for _ in range(30):
+            html = page.content()
+            if "listTitle" in html:
+                break
+            time.sleep(1)
+        else:
+            browser.close()
+            raise RuntimeError("게시글 렌더 실패")
 
         soup = BeautifulSoup(page.content(), "html.parser")
         browser.close()
 
-    # 5️⃣ 최신글 추출
-    title_tag = soup.select_one("a[href*='/detail/'] p.listTitle")
-    if not title_tag:
-        print("⚠️ [이화이언] 게시글을 찾지 못함")
+    # 최신글 추출
+    first = soup.select_one("a[href*='/detail/'] p.listTitle")
+    if not first:
+        print("❌ 최신글 못 찾음")
         return
 
-    title = title_tag.text.strip()
-    link = urljoin(BASE_URL, title_tag.find_parent("a")["href"])
+    title = first.get_text(strip=True)
+    link = urljoin("https://ewhaian.com", first.find_parent("a")["href"])
 
-    last_title = state.get("latest_title")
+    print(f"📌 최신글: {title}")
 
-    if last_title != title:
+    last = state.get("ewhaian")
+    if last != title:
         send_email(
-            "[이화이언 알바정보 새 글]",
-            f"제목: {title}\n\n링크: {link}"
+            "[이화이언] 새 글 알림",
+            f"{title}\n\n{link}"
         )
-        state["latest_title"] = title
-        print("🆕 [이화이언] 새 글 감지")
+        state["ewhaian"] = title
+        save_state(state)
+        print("📧 메일 발송")
     else:
-        print("🔁 [이화이언] 변화 없음")
+        print("변경 없음")
 
 # =====================
-# 메인
+# main
 # =====================
 def main():
     state = load_state()
     check_ewhaian(state)
-    save_state(state)
 
 if __name__ == "__main__":
     main()
