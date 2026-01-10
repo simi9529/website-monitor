@@ -131,39 +131,56 @@ def check_site(site, last_state, session=None):
     # =====================
     # 게시글 번호(board_seq) 기준 감지
     # =====================
-    post_tags = soup.select(site["selector"])
+rows = soup.select("table.bdListTbl tbody tr")
 
-    latest_post_id = None
-    latest_title = None
-    latest_link = None
+latest_post_id = None
+latest_title = None
+latest_link = None
+latest_display_num = None
 
-    for tag in post_tags:
-        href = tag.get("href", "")
-        if "board_seq=" in href:
-            latest_post_id = href.split("board_seq=")[-1]
-            latest_title = tag.text.strip()
-            latest_link = urljoin(site["url"], href)
-            break   # ✅ 첫 번째 일반글만 사용
+for row in rows:
+    num_td = row.select_one("td.num")
+    subject_a = row.select_one("td.subject a")
 
-    if not latest_post_id:
-        print(f"⚠️ [{site['name']}] board_seq 미검출")
-        return
+    if not num_td or not subject_a:
+        continue
 
-    last_id = last_state.get(site["name"])
+    num_text = num_td.text.strip()
 
-    if last_id != latest_post_id:
-        print(f"🆕 [{site['name']}] 새 글 감지")
-        body = (
-            f"새 글이 등록되었습니다.\n\n"
-            f"[{site['name']}]\n"
-            f"제목: {latest_title}\n"
-            f"글 번호: {latest_post_id}\n"
-            f"링크: {latest_link}"
-        )
-        send_email(f"[새 글 알림] {site['name']}", body)
-        last_state[site["name"]] = latest_post_id
-    else:
-        print(f"🔁 [{site['name']}] 변화 없음 ({latest_post_id})")
+    # ✅ 공지글 제외: 숫자인 경우만 통과
+    if not num_text.isdigit():
+        continue
+
+    href = subject_a.get("href", "")
+    if "board_seq=" not in href:
+        continue
+
+    latest_display_num = num_text          # 화면에 보이는 499
+    latest_post_id = href.split("board_seq=")[-1]  # DB 번호
+    latest_title = subject_a.text.strip()
+    latest_link = urljoin(site["url"], href)
+    break   # 🔥 가장 위의 일반글 1개만
+
+if not latest_post_id:
+    print(f"⚠️ [{site['name']}] 일반 게시글을 찾지 못했습니다.")
+    return
+
+last_id = last_state.get(site["name"])
+
+if last_id != latest_post_id:
+    print(f"🆕 [{site['name']}] 새 글 감지 (번호 {latest_display_num})")
+    body = (
+        f"새 글이 등록되었습니다.\n\n"
+        f"[{site['name']}]\n"
+        f"게시판 번호: {latest_display_num}\n"
+        f"제목: {latest_title}\n"
+        f"board_seq: {latest_post_id}\n"
+        f"링크: {latest_link}"
+    )
+    send_email(f"[새 글 알림] {site['name']}", body)
+    last_state[site["name"]] = latest_post_id
+else:
+    print(f"🔁 [{site['name']}] 변화 없음 ({latest_display_num})")
 
 # =====================
 # 전체 실행
