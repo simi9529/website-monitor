@@ -62,4 +62,55 @@ def check_donga_category(page, state, category_name, url):
     if not link.startswith("http"):
         link = "https://law.donga.ac.kr" + link
 
-    body
+    body = f"""[동아대학교 법학전문대학원 - {category_name}]
+
+제목: {title}
+
+링크:
+{link}
+
+확인 시각: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+"""
+
+    send_email(f"[동아대 law {category_name}] 새 공지", body)
+
+    # --- ★중요: 메일 보낸 직후 저장 ---
+    saved_titles.insert(0, title)
+    donga[category_name] = saved_titles[:20]
+    save_state(state)
+
+# ======================
+# main
+# ======================
+def main():
+    state = load_state()
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        check_donga_category(
+            page,
+            state,
+            "학사공지",
+            "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN077"
+        )
+
+        check_donga_category(
+            page,
+            state,
+            "수업공지",
+            "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN078"
+        )
+
+        check_donga_category(
+            page,
+            state,
+            "특강·모의고사",
+            "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN079"
+        )
+
+        browser.close()
+
+if __name__ == "__main__":
+    main()
