@@ -118,3 +118,20 @@ def check_ewhaian(state):
                 f"링크: {latest_link}"
             )
             send_email("[이화이언] 알바정보 새 글", body)
+            state["ewha_alba"] = latest_title
+            print(f"🆕 새 글 감지: {latest_title}")
+        else:
+            print("🔁 변화 없음")
+
+        browser.close()
+
+# ======================
+# 메인
+# ======================
+def main():
+    state = load_state()
+    check_ewhaian(state)
+    save_state(state)
+
+if __name__ == "__main__":
+    main()
