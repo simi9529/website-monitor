@@ -8,9 +8,9 @@ from datetime import datetime
 STATE_FILE = "titles.json"
 
 # ======================
-# 공통 유틸
+# 유틸
 # ======================
-def normalize(text: str) -> str:
+def normalize(text):
     return " ".join(text.split()).strip()
 
 def load_state():
@@ -39,28 +39,33 @@ def send_email(subject, body):
 def check_donga_category(page, state, category_name, url):
     print(f"🔍 [동아대 law {category_name}] 확인 중...")
 
-    page.goto(url)
-    page.wait_for_selector("tbody tr")
+    page.goto(url, timeout=60000)
+    page.wait_for_load_state("networkidle", timeout=60000)
 
-    latest = page.query_selector("tbody tr")
-    title = latest.query_selector("a").inner_text()
-    title = normalize(title)
+    # ✅ table이 뜰 때까지 기다림
+    page.wait_for_selector("table tbody tr", timeout=60000)
 
-    # --- state 구조 확보 ---
+    rows = page.query_selector_all("table tbody tr")
+    if not rows:
+        print(f"⚠️ [{category_name}] 게시글 없음")
+        return
+
+    latest = rows[0]
+    a_tag = latest.query_selector("a")
+    title = normalize(a_tag.inner_text())
+
     donga = state.setdefault("dongA", {})
-    saved_titles = donga.setdefault(category_name, [])
+    sent_titles = donga.setdefault(category_name, [])
 
-    # --- 중복 검사 ---
-    if title in saved_titles:
+    if title in sent_titles:
         print(f"⏩ [{category_name}] 이미 알림 보낸 글")
         return
 
-    # --- 새 글 ---
-    print(f"🆕 새 글 감지: {title}")
-
-    link = latest.query_selector("a").get_attribute("href")
+    link = a_tag.get_attribute("href")
     if not link.startswith("http"):
         link = "https://law.donga.ac.kr" + link
+
+    print(f"🆕 새 글 감지: {title}")
 
     body = f"""[동아대학교 법학전문대학원 - {category_name}]
 
@@ -74,9 +79,9 @@ def check_donga_category(page, state, category_name, url):
 
     send_email(f"[동아대 law {category_name}] 새 공지", body)
 
-    # --- ★중요: 메일 보낸 직후 저장 ---
-    saved_titles.insert(0, title)
-    donga[category_name] = saved_titles[:20]
+    # 🔐 즉시 저장 (중복 방지 핵심)
+    sent_titles.insert(0, title)
+    donga[category_name] = sent_titles[:20]
     save_state(state)
 
 # ======================
@@ -90,23 +95,17 @@ def main():
         page = browser.new_page()
 
         check_donga_category(
-            page,
-            state,
-            "학사공지",
+            page, state, "학사공지",
             "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN077"
         )
 
         check_donga_category(
-            page,
-            state,
-            "수업공지",
+            page, state, "수업공지",
             "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN078"
         )
 
         check_donga_category(
-            page,
-            state,
-            "특강·모의고사",
+            page, state, "특강·모의고사",
             "https://law.donga.ac.kr/law/CMS/Board/Board.do?mCode=MN079"
         )
 
