@@ -2,7 +2,6 @@ import os
 import json
 import smtplib
 from email.mime.text import MIMEText
-from urllib.parse import urljoin
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
 # ======================
@@ -15,12 +14,7 @@ APP_PASSWORD = os.environ.get("APP_PASSWORD")
 EWHA_ID = os.environ.get("EWHA_ID")
 EWHA_PW = os.environ.get("EWHA_PW")
 
-STATE_FILE = "state.json"
-
-# ======================
-# 제외 키워드
-# ======================
-EXCLUDE_KEYWORDS = ["과외", "선생님"]
+STATE_FILE = "ewha_state.json"
 
 # ======================
 # 상태 저장
@@ -49,88 +43,78 @@ def send_email(subject, body):
         server.send_message(msg)
 
 # ======================
-# 키워드 필터
-# ======================
-def is_excluded(title: str) -> bool:
-    return any(word in title for word in EXCLUDE_KEYWORDS)
-
-# ======================
 # 이화이언 체크
 # ======================
 def check_ewhaian(state):
-    print("🔍 이화이언 확인 중...")
+    print("🔍 이화이언 알바정보 확인 중...")
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
-        page = context.new_page()
+        page = browser.new_page()
 
         # 1️⃣ 로그인 페이지
         page.goto("https://ewhaian.com/login", timeout=60000)
 
+        # 로그인 입력
         page.fill("input[name='id']", EWHA_ID)
         page.fill("input[name='password']", EWHA_PW)
+
+        # 로그인 버튼 클릭
         page.click("button:has-text('로그인')")
 
-        # 2️⃣ 로그인 완료 대기
+        # 2️⃣ 로그인 완료 대기 (mypage or 메인)
         page.wait_for_load_state("networkidle", timeout=60000)
 
-        # 3️⃣ 팝업 닫기 (있으면 닫고, 없으면 패스)
+        # 3️⃣ 팝업 닫기 (있으면 닫고, 없으면 그냥 통과)
         try:
             page.wait_for_selector("button:has-text('닫기')", timeout=5000)
             page.click("button:has-text('닫기')")
-            print("🧹 팝업 닫기 완료")
+            print("✅ 팝업 닫기 성공")
         except PlaywrightTimeoutError:
-            pass
+            print("ℹ️ 팝업 없음 (또는 자동 무시)")
 
         # 4️⃣ 알바정보 게시판 이동
         page.goto("https://ewhaian.com/life/66", timeout=60000)
 
-        # 5️⃣ 일반글 제목 대기 (공지 제외)
-        page.wait_for_selector("p.listTitle.title-sm", timeout=60000)
+        # 5️⃣ 게시글 로딩 대기 (가장 안정적인 기준)
+        page.wait_for_selector("a[href*='/detail/']", timeout=60000)
 
-        # 6️⃣ 최신 일반글 1개 추출
-        title_el = page.query_selector("p.listTitle.title-sm")
-        title = title_el.inner_text().strip()
+        # 6️⃣ 게시글 수집
+        items = page.query_selector_all("a[href*='/detail/']")
 
-        link_el = title_el.evaluate_handle(
-            "el => el.closest('a')"
-        )
-        link = urljoin("https://ewhaian.com", link_el.get_property("href").json_value())
+        latest_title = None
+        latest_link = None
 
-        print(f"📌 최신 글: {title}")
+        for item in items:
+            title_el = item.query_selector("p.listTitle")
+            if not title_el:
+                continue
 
-        # 7️⃣ 키워드 제외
-        if is_excluded(title):
-            print(f"🚫 제외 키워드 포함 → 알림 안 함")
+            title = title_el.inner_text().strip()
+
+            # ❌ 공지/정책 제외
+            if "정책" in title or "공지" in title:
+                continue
+
+            # ❌ 제외 키워드
+            if "과외" in title or "선생님" in title:
+                continue
+
+            latest_title = title
+            latest_link = "https://ewhaian.com" + item.get_attribute("href")
+            break
+
+        if not latest_title:
+            print("⚠️ 조건에 맞는 일반글 없음")
             browser.close()
             return
 
-        # 8️⃣ 상태 비교
-        last_title = state.get("ewhaian_title")
+        last_title = state.get("ewha_alba")
 
-        if last_title != title:
-            print("🆕 새 글 감지 → 메일 발송")
-
+        if last_title != latest_title:
             body = (
-                f"[이화이언 알바정보]\n\n"
-                f"제목: {title}\n\n"
-                f"링크: {link}"
+                "[이화이언 알바정보 새 글]\n\n"
+                f"제목: {latest_title}\n\n"
+                f"링크: {latest_link}"
             )
-            send_email("[이화이언] 새 알바 글", body)
-            state["ewhaian_title"] = title
-        else:
-            print("🔁 변화 없음")
-
-        browser.close()
-
-# ======================
-# 메인
-# ======================
-def main():
-    state = load_state()
-    check_ewhaian(state)
-    save_state(state)
-
-if __name__ == "__main__":
-    main()
+            send_email("[이화이언] 알바정보 새 글", body)
