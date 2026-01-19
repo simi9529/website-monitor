@@ -4,7 +4,9 @@ import smtplib
 from email.mime.text import MIMEText
 import os
 import json
+import time
 from urllib.parse import urljoin
+from requests.exceptions import ReadTimeout, RequestException
 
 # ======================
 # 환경변수
@@ -14,6 +16,10 @@ TO_EMAIL = os.environ.get("TO_EMAIL")
 APP_PASSWORD = os.environ.get("APP_PASSWORD")
 
 STATE_FILE = "titles.json"
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+}
 
 # ======================
 # 동아대 게시판
@@ -60,13 +66,35 @@ def send_email(subject, body):
         server.send_message(msg)
 
 # ======================
+# 안전 요청 함수 (핵심)
+# ======================
+def safe_get(url, name, retries=3):
+    for attempt in range(1, retries + 1):
+        try:
+            return requests.get(
+                url,
+                headers=HEADERS,
+                timeout=(5, 20)  # ⬅️ 30초보다 이게 더 안정적
+            )
+        except ReadTimeout:
+            print(f"⏳ [{name}] 응답 지연 ({attempt}/{retries})")
+        except RequestException as e:
+            print(f"⚠️ [{name}] 요청 오류 ({attempt}/{retries}): {e}")
+
+        time.sleep(2)
+
+    print(f"🚫 [{name}] 최종 실패 → 이번 회차 스킵")
+    return None
+
+# ======================
 # 게시판 체크
 # ======================
 def check_donga_board(board, state):
     print(f"🔍 [{board['name']}] 확인 중...")
 
-    res = requests.get(board["url"], timeout=30)
-    res.raise_for_status()
+    res = safe_get(board["url"], board["name"])
+    if res is None or res.status_code != 200:
+        return  # ❗ 여기서 끝 → 절대 죽지 않음
 
     soup = BeautifulSoup(res.text, "html.parser")
     rows = soup.select("table.bdListTbl tbody tr")
@@ -110,15 +138,17 @@ def check_donga_board(board, state):
         break  # 최신 일반글 1개만
 
 # ======================
-# 메인
+# 메인 (최후 안전망)
 # ======================
 def main():
-    state = load_state()
-
-    for board in DONGA_BOARDS:
-        check_donga_board(board, state)
-
-    save_state(state)
+    try:
+        state = load_state()
+        for board in DONGA_BOARDS:
+            check_donga_board(board, state)
+        save_state(state)
+    except Exception as e:
+        print("🔥 치명적 예외 발생 (강제 종료 방지)")
+        print(e)
 
 if __name__ == "__main__":
     main()
