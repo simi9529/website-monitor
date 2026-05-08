@@ -1,0 +1,30 @@
+name: Notion to Google Calendar Sync
+
+on:
+  schedule:
+    - cron: '*/30 * * * *' # 30분마다 자동 실행
+  workflow_dispatch: # 수동으로도 버튼 눌러서 실행 가능하게 설정
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Install dependencies
+        # 구글 API 통신을 위한 필수 라이브러리들 한 번에 설치
+        run: |
+          pip install notion-client google-api-python-client google-auth-httplib2 google-auth-oauthlib
+
+      - name: Run sync script
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
+          GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+        run: python sync_calendar.py
