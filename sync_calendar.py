@@ -34,10 +34,26 @@ def sync_to_calendar():
     print("--- Notion -> Google Calendar 동기화 시작 ---")
     
     # 1. Notion 데이터 가져오기 (가장 최근 수정된 100개)
-    results = notion.databases.query(
-        database_id=NOTION_DB_ID,
-        sorts=[{"timestamp": "last_edited_time", "direction": "descending"}]
-    ).get("results", [])
+    # 🚨 수정된 부분: 에러를 피하기 위해 API를 직접 호출합니다. 🚨
+    query_payload = {
+        "sorts": [
+            {
+                "timestamp": "last_edited_time",
+                "direction": "descending"
+            }
+        ]
+    }
+    
+    try:
+        response = notion.request(
+            method="POST",
+            path=f"/databases/{NOTION_DB_ID}/query",
+            body=query_payload
+        )
+        results = response.get("results", [])
+    except Exception as e:
+        print(f"❌ 데이터베이스 쿼리 실패: {e}")
+        return
 
     for page in results:
         props = page["properties"]
@@ -50,7 +66,7 @@ def sync_to_calendar():
                 title = value["title"][0]["text"]["content"]
                 break
 
-        # 3. '기간' 속성에서 날짜 추출 (이전에 만든 그 열 사용)
+        # 3. '기간' 속성에서 날짜 추출
         date_prop = props.get("기간", {}).get("date")
         if not date_prop:
             continue # 기간이 입력되지 않은 일정은 패스
