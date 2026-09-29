@@ -48,7 +48,7 @@ DONGA_BOARDS = [
 YOUTUBE_BOARDS = [
     {
         "name": "공모주린이",
-        "url": "https://www.youtube.com/@%EA%B3%B5%EB%AA%A8%EC%A3%BC%EB%A6%B0%EC%9D%B40301/posts"
+        "url": "https://www.youtube.com/@%EA%B3%B5%EB%AA%A8%EC%A3%BC%EB%A6%B0%EC%9D%B4_0301/posts"
     },
      {
         "name": "공모주린이2",
