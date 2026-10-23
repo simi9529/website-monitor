@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import requests
 
-from canvas_lms import CanvasClient, CanvasError, Notification, STATE_KEY, monitor_canvas
+from canvas_lms import CanvasClient, CanvasError, Notification, STATE_KEY, monitor_canvas, message_links, notification_body
 
 
 NOW = datetime(2026, 10, 23, 12, 0, tzinfo=timezone.utc)
@@ -37,6 +37,34 @@ class CanvasClientTests(unittest.TestCase):
     def setUp(self):
         self.session = MagicMock()
         self.client = CanvasClient(self.session)
+
+    def test_message_body_links_replace_conversation_url_in_email(self):
+        self.session.get.side_effect = [
+            response({'id': 1}), response([conversation()]),
+            response({'messages': [{**message(101), 'body':
+                '<a href="https://lecture.example/watch?a=1&amp;b=2">강의</a> '
+                'https://lecture.example/material.pdf'}]})
+        ]
+        events, _ = self.client.poll_messages({'checked_at': BEFORE, 'conversations': {}}, now=NOW)
+        body = notification_body(events)
+        self.assertIn('https://lecture.example/watch?a=1&b=2', body)
+        self.assertIn('https://lecture.example/material.pdf', body)
+        self.assertNotIn('/conversations/20', body)
+        self.session.put.assert_not_called()
+
+    def test_message_links_are_deduplicated_and_only_web_links_are_included(self):
+        self.assertEqual(message_links(
+            '<a href="javascript:alert(1)">실행</a><a href="mailto:a@example.com">메일</a>'
+            '<a href="https://example.com/a">링크</a> https://example.com/a '
+            '(https://example.com/lesson_(1)). <a href="/courses/1">수업</a>'
+        ), ('https://example.com/a', 'https://example.com/lesson_(1)',
+            'https://canvas.donga.ac.kr/courses/1'))
+
+    def test_message_without_links_keeps_conversation_link(self):
+        for body in [None, '', '링크 없는 메시지']:
+            self.assertEqual(message_links(body), ())
+        event = Notification('대화메시지', '질문', 'https://canvas.donga.ac.kr/conversations/20', NOW)
+        self.assertIn(event.url, notification_body([event]))
 
     def test_announcement_baseline_then_both_new_posts(self):
         self.session.get.side_effect = [

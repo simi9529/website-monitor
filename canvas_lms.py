@@ -6,8 +6,10 @@ before this reader can be enabled in the scheduled monitor.
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import re
 from urllib.parse import urlencode, urljoin, urlsplit
 
+from bs4 import BeautifulSoup
 import requests
 
 
@@ -42,6 +44,45 @@ class Notification:
     title: str
     url: str
     created_at: datetime
+    links: tuple[str, ...] = ()
+
+
+def message_links(body):
+    """Extract web links without visiting them or changing Canvas read status."""
+    if not isinstance(body, str):
+        return ()
+    soup = BeautifulSoup(body, "html.parser")
+    links = []
+
+    def add(value):
+        value = value.strip()
+        if value.startswith(("/", "./", "../")) and not value.startswith("//"):
+            value = urljoin(BASE_URL + "/", value)
+        elif value.startswith("//"):
+            value = "https:" + value
+        try:
+            parts = urlsplit(value)
+            valid = (parts.scheme in ("http", "https") and parts.hostname
+                     and not parts.username and not parts.password
+                     and not any(char.isspace() or ord(char) < 32 for char in value))
+        except ValueError:
+            valid = False
+        if valid and value not in links:
+            links.append(value)
+
+    for element in soup.find_all(["script", "style"]):
+        element.decompose()
+    for element in soup.descendants:
+        if getattr(element, "name", None) == "a":
+            add(element.get("href") or "")
+        elif isinstance(element, str) and not element.find_parent("a"):
+            for match in re.finditer(r'https?://[^\s<>"\u0027]+', element):
+                value = match.group().rstrip(".,;:!?。，；！")
+                for opening, closing in [("(", ")"), ("[", "]"), ("{", "}")]:
+                    while value.endswith(closing) and value.count(closing) > value.count(opening):
+                        value = value[:-1]
+                add(value)
+    return tuple(links)
 
 
 class CanvasClient:
@@ -166,6 +207,7 @@ class CanvasClient:
                     events.append(Notification(
                         "대화메시지", row.get("subject") or "제목 없는 대화",
                         self._url(f"/conversations/{conversation_id}?{query}", api_only=False), date,
+                        message_links(message.get("body")),
                     ))
             marks[conversation_id] = {"signature": signature, "last_message_id": latest_id}
         return events, {"conversations": marks, "checked_at": now.isoformat()}
@@ -173,7 +215,7 @@ class CanvasClient:
 
 def notification_body(events):
     return "[동아대 Canvas 새 알림]\n\n" + "\n\n".join(
-        f"{index}. [{event.kind}] {event.title}\n{event.url}"
+        f"{index}. [{event.kind}] {event.title}\n" + "\n".join(event.links or (event.url,))
         for index, event in enumerate(events, 1)
     )
 
