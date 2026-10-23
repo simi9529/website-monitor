@@ -4,6 +4,12 @@ on:
   schedule:
     - cron: '*/5 * * * *'  # 5분마다 실행
   workflow_dispatch:        # 수동 실행 버튼
+    inputs:
+      send_latest_ewhaian:
+        description: '이화이언 최신 글 링크를 담은 시험 메일 1통 발송'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   run-script:
@@ -39,7 +45,13 @@ jobs:
           EWHA_ID: ${{ secrets.EWHA_ID }}
           EWHA_PW: ${{ secrets.EWHA_PW }}
           GITHUB_ACTIONS: true
-        run: python dongaupdate.py
+          SEND_LATEST_EWHAIAN: ${{ github.event.inputs.send_latest_ewhaian || 'false' }}
+        run: |
+          if [ "$SEND_LATEST_EWHAIAN" = "true" ]; then
+            python dongaupdate.py --send-latest-ewhaian
+          else
+            python dongaupdate.py
+          fi
 
       - name: Commit updated titles.json
         run: |

@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
 import smtplib
+import ssl
 from email.mime.text import MIMEText
 import os
 import json
@@ -8,6 +9,7 @@ import time
 import re  # 유튜브 파싱을 위한 정규표현식 모듈 추가
 from urllib.parse import urljoin
 from requests.exceptions import ReadTimeout, RequestException
+from ewhaian import EwhaianError, fetch_posts
 
 # ======================
 # 환경변수
@@ -78,7 +80,9 @@ def send_email(subject, body):
     msg["From"] = FROM_EMAIL
     msg["To"] = TO_EMAIL
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+    with smtplib.SMTP_SSL(
+        "smtp.gmail.com", 465, timeout=20, context=ssl.create_default_context()
+    ) as server:
         server.login(FROM_EMAIL, APP_PASSWORD)
         server.send_message(msg)
 
@@ -219,6 +223,91 @@ def check_youtube_board(board, state):
         print(f"⚠️ [{board['name']}] 파싱 중 오류 발생: {e}")
 
 # ======================
+# 이화이언 로그인 게시판
+# ======================
+EWHA_STATE_KEY = "ewhaian_life_66"
+
+
+def send_ewhaian_digest(posts, test=False):
+    entries = "\n\n".join(
+        f"{index}. {post.title}\n{post.url}"
+        for index, post in enumerate(posts, start=1)
+    )
+    subject = (
+        "[이화이언] life/66 최신 글 — 시험 발송"
+        if test else f"[이화이언] life/66 새 글 {len(posts)}개"
+    )
+    send_email(subject, f"[이화이언 life/66]\n\n게시글 {len(posts)}개\n\n{entries}")
+
+
+def check_ewhaian_board(state):
+    username = os.environ.get("EWHA_ID")
+    password = os.environ.get("EWHA_PW")
+    if not username or not password:
+        print("⏭ [이화이언] EWHA_ID 또는 EWHA_PW 미설정 → 스킵")
+        return
+
+    previous = state.get(EWHA_STATE_KEY)
+    last_seen = int(previous) if str(previous).isdigit() else None
+    try:
+        posts = fetch_posts(username, password, last_seen)
+    except EwhaianError as error:
+        print(f"⚠️ [이화이언] {error}")
+        return
+
+    if not posts:
+        print("🔁 [이화이언] 새 글 없음")
+        return
+    if last_seen is None:
+        # Start with the current newest post; do not email historical posts.
+        state[EWHA_STATE_KEY] = str(posts[-1].id)
+        print("✅ [이화이언] 최초 확인 완료 → 다음 새 글부터 알림")
+        return
+
+    try:
+        send_ewhaian_digest(posts)
+    except Exception:
+        # Retry the whole digest without losing any unsent post links.
+        print("⚠️ [이화이언] 이메일 발송 실패 → 모든 미발송 글을 다음 회차에 재시도")
+        return
+    state[EWHA_STATE_KEY] = str(posts[-1].id)
+    print(f"✅ [이화이언] 새 글 {len(posts)}개의 링크를 메일 1통으로 발송 완료")
+
+
+def send_latest_ewhaian():
+    """Send one real test message and initialize a missing local checkpoint."""
+    required = ["EWHA_ID", "EWHA_PW", "FROM_EMAIL", "TO_EMAIL", "APP_PASSWORD"]
+    missing = [name for name in required if not os.environ.get(name)]
+    if missing:
+        print("시험 발송 불가: 실행 환경에 없는 변수: " + ", ".join(missing))
+        return 2
+    try:
+        state = load_state()
+        posts = fetch_posts(os.environ["EWHA_ID"], os.environ["EWHA_PW"])
+        if not posts:
+            print("시험 발송 불가: 최신 게시글을 찾지 못했습니다")
+            return 1
+        latest = posts[-1]
+        send_ewhaian_digest([latest], test=True)
+    except EwhaianError as error:
+        print(f"시험 발송 실패: {error}")
+        return 1
+    except Exception as error:
+        print(f"시험 발송 실패: {type(error).__name__} (인증 정보는 출력하지 않습니다)")
+        return 1
+    print("✅ 실제 로그인 후 최신 글 링크를 포함한 시험 메일을 SMTP 서버에 전달했습니다")
+    # Do not skip previously unnotified posts if a monitor is already running.
+    if not str(state.get(EWHA_STATE_KEY)).isdigit():
+        state[EWHA_STATE_KEY] = str(latest.id)
+        try:
+            save_state(state)
+        except Exception:
+            print("⚠️ 메일은 전달됐지만 모니터링 시작 기준을 저장하지 못했습니다")
+            return 1
+    return 0
+
+
+# ======================
 # 메인 (최후 안전망)
 # ======================
 def main():
@@ -227,11 +316,23 @@ def main():
         
         # 동아대 점검
         for board in DONGA_BOARDS:
-            check_donga_board(board, state)
+            try:
+                check_donga_board(board, state)
+            except Exception:
+                print(f"⚠️ [{board['name']}] 확인 실패 → 다음 사이트 계속")
             
         # 유튜브 점검
         for yt in YOUTUBE_BOARDS:
-            check_youtube_board(yt, state)
+            try:
+                check_youtube_board(yt, state)
+            except Exception:
+                print(f"⚠️ [{yt['name']}] 확인 실패 → 다음 사이트 계속")
+
+        # 로그인 실패가 기존 모니터링에 영향을 주지 않도록 분리
+        try:
+            check_ewhaian_board(state)
+        except Exception:
+            print("⚠️ [이화이언] 확인 실패 → 기존 사이트 상태는 저장")
             
         save_state(state)
     except Exception as e:
@@ -239,4 +340,14 @@ def main():
         print(e)
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--send-latest-ewhaian", action="store_true",
+        help="실제 계정으로 로그인해 최신 글 링크를 담은 시험 메일 1통을 발송",
+    )
+    args = parser.parse_args()
+    if args.send_latest_ewhaian:
+        raise SystemExit(send_latest_ewhaian())
     main()
