@@ -33,6 +33,7 @@ jobs:
       EWHA_PW: ${{ secrets.EWHA_PW }}
       CANVAS_ID: ${{ secrets.CANVAS_ID }}
       CANVAS_PW: ${{ secrets.CANVAS_PW }}
+      CANVAS_REPLACE_SESSION: 'true' # 사용자가 학교 포털 기존 연결 종료를 허용함
       SEND_LATEST_EWHAIAN: ${{ github.event.inputs.send_latest_ewhaian || 'false' }}
       TEST_CANVAS: ${{ github.event.inputs.test_canvas || 'false' }}
 

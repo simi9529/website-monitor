@@ -100,6 +100,8 @@ class CanvasClientTests(unittest.TestCase):
         self.assertEqual(self.session.get.call_args.kwargs["params"], {"auto_mark_as_read": "false"})
         self.assertFalse(self.session.get.call_args.kwargs["allow_redirects"])
         self.session.post.assert_not_called()
+        self.session.put.assert_not_called()
+        self.session.delete.assert_not_called()
 
     def test_message_baseline_does_not_notify_historical_messages(self):
         self.session.get.side_effect = [
@@ -235,6 +237,33 @@ class CanvasIntegrationTests(unittest.TestCase):
         self.mail.side_effect = RuntimeError("private fixture")
         self.assertEqual(self.app.send_latest_canvas(), 1)
         self.save.assert_not_called()
+
+
+class LoginDiagnosticsTests(unittest.TestCase):
+    def test_only_authorized_school_duplicate_login_confirmation_is_accepted(self):
+        from canvas_sso import _handle_dialog
+        for allowed, host, kind, message, accept in [
+            (True, 'login.donga.ac.kr', 'confirm', '이전 로그인을 끊고 강제로 로그인하시겠습니까?', True),
+            (False, 'login.donga.ac.kr', 'confirm', '이전 로그인을 끊고 강제로 로그인하시겠습니까?', False),
+            (True, 'other.example', 'confirm', '이전 로그인을 끊고 강제로 로그인하시겠습니까?', False),
+            (True, 'login.donga.ac.kr', 'confirm', '추가 인증 동의', False),
+            (True, 'login.donga.ac.kr', 'alert', '이전 로그인을 끊고 강제로 로그인하시겠습니까?', False),
+            (True, 'login.donga.ac.kr', 'confirm', 'Do you want to terminate the previous login and force a login?', True),
+        ]:
+            with self.subTest(allowed=allowed, host=host, kind=kind, message=message):
+                page = MagicMock(url='https://' + host + '/login')
+                dialog = MagicMock(type=kind, message=message)
+                _handle_dialog(page, dialog, allowed)
+                self.assertEqual(dialog.accept.call_count, int(accept))
+                self.assertEqual(dialog.dismiss.call_count, int(not accept))
+
+    def test_known_school_error_is_reported_without_server_message(self):
+        from canvas_sso import _login_error
+        page = MagicMock()
+        page.evaluate.return_value = '9002'
+        self.assertIn('중복 로그인', _login_error(page))
+        page.evaluate.return_value = 'private server text'
+        self.assertIsNone(_login_error(page))
 
 
 if __name__ == "__main__":

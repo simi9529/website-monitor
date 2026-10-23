@@ -4,7 +4,6 @@ from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
-import re
 from urllib.parse import unquote, urljoin, urlsplit
 
 from playwright.sync_api import sync_playwright
@@ -18,11 +17,49 @@ SSO_HOSTS = {
     "dxsso.donga.ac.kr", "login.donga.ac.kr",
 }
 
+LOGIN_ERRORS = {
+    "9000": "학교 계정 아이디를 찾지 못했습니다",
+    "9001": "학교 비밀번호가 일치하지 않습니다. GitHub의 CANVAS_PW를 확인하세요",
+    "9002": "학교 포털에서 중복 로그인 확인이 필요합니다",
+    "9003": "학교 계정이 차단된 상태입니다",
+    "9004": "학교 계정의 접근 권한을 확인해야 합니다",
+    "9005": "학교 계정의 로그인 오류 횟수를 초과했습니다",
+    "9006": "학교 비밀번호 변경이 필요합니다",
+    "9007": "학교 초기 비밀번호 변경이 필요합니다",
+    "9008": "학교가 실행 환경의 IP에서 로그인을 제한했습니다",
+    "9009": "학교 포털의 개인정보 이용 동의가 필요합니다",
+    "9010": "학교 계정의 로그인이 제한됐습니다",
+    "9011": "학교 계정의 사용 기한이 만료됐습니다",
+    "9012": "학교 포털의 추가 인증이 필요합니다",
+}
+
+
+def _login_error(page):
+    try:
+        code = page.evaluate("""() => {
+            const element = document.querySelector('[x-data="loginFormData"]');
+            return element && window.Alpine ? String(Alpine.$data(element).loginErrorCode || '') : '';
+        }""")
+    except Exception:
+        return None
+    # Only output known public error codes, never arbitrary page/server text.
+    return f"{LOGIN_ERRORS[code]} (학교 오류 {code})" if code in LOGIN_ERRORS else None
+
 
 def _allowed(url):
     parts = urlsplit(url)
     return (parts.scheme == "https" and parts.hostname in SSO_HOSTS
             and parts.port in (None, 443) and not parts.username and not parts.password)
+
+
+def _handle_dialog(page, dialog, replace_existing):
+    duplicate = ("이전 로그인을 끊고 강제로 로그인하시겠습니까?" in dialog.message
+                 or "Do you want to terminate the previous login and force a login?" in dialog.message)
+    if (replace_existing and dialog.type == "confirm" and duplicate
+            and urlsplit(page.url).hostname == "login.donga.ac.kr"):
+        dialog.accept()
+    else:
+        dialog.dismiss()
 
 
 def _verified_proxy_transport(context):
@@ -65,7 +102,9 @@ def _verified_proxy_transport(context):
 
 
 @contextmanager
-def sso_session(username, password):
+def sso_session(username, password, replace_existing=None):
+    if replace_existing is None:
+        replace_existing = os.environ.get("CANVAS_REPLACE_SESSION", "false").lower() == "true"
     session = requests.Session()
     try:
         with sync_playwright() as playwright:
@@ -85,7 +124,7 @@ def sso_session(username, password):
                 if proxy.hostname:
                     issues = _verified_proxy_transport(context)
                 page = context.new_page()
-                page.on("dialog", lambda dialog: dialog.dismiss())
+                page.on("dialog", lambda dialog: _handle_dialog(page, dialog, replace_existing))
                 stage = "Canvas 로그인 페이지"
                 try:
                     page.goto(BASE_URL + "/login", wait_until="domcontentloaded", timeout=30000)
@@ -102,10 +141,16 @@ def sso_session(username, password):
                     # password field has an official Enter-to-login handler.
                     page.locator("#pswd").press("Enter", timeout=10000)
                     stage = "학교 인증 후 Canvas 복귀"
-                    page.wait_for_url(
-                        re.compile(r"^https://canvas\.donga\.ac\.kr(?::443)?/"),
-                        wait_until="domcontentloaded", timeout=45000,
-                    )
+                    page.wait_for_function("""replaceExisting => {
+                        if (location.hostname === 'canvas.donga.ac.kr') return true;
+                        const element = document.querySelector('[x-data="loginFormData"]');
+                        const code = element && window.Alpine ? String(Alpine.$data(element).loginErrorCode || '') : '';
+                        return code && code !== '9100' && code !== '9101'
+                            && !(replaceExisting && code === '9002');
+                    }""", arg=replace_existing, timeout=45000)
+                    if urlsplit(page.url).hostname != "canvas.donga.ac.kr":
+                        raise CanvasError(_login_error(page) or "학교 인증을 완료하지 못했습니다")
+                    page.wait_for_load_state("domcontentloaded", timeout=30000)
                     for cookie in context.cookies(BASE_URL):
                         if cookie["domain"].lstrip(".") != "canvas.donga.ac.kr":
                             continue
@@ -118,7 +163,7 @@ def sso_session(username, password):
                 except Exception:
                     raise CanvasError(
                         f"학교 통합 로그인 미완료 ({stage}; {urlsplit(page.url).hostname}). "
-                        + (issues[-1] if issues else "계정 정보나 추가 인증 여부를 확인하세요")
+                        + (_login_error(page) or (issues[-1] if issues else "계정 정보나 추가 인증 여부를 확인하세요"))
                     ) from None
             finally:
                 browser.close()
