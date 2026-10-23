@@ -13,39 +13,61 @@ on:
 
 jobs:
   run-script:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write  # titles.json의 마지막 알림 상태 저장
+    env:
+      FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+      TO_EMAIL: ${{ secrets.TO_EMAIL }}
+      APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+      EWHA_ID: ${{ secrets.EWHA_ID }}
+      EWHA_PW: ${{ secrets.EWHA_PW }}
+      SEND_LATEST_EWHAIAN: ${{ github.event.inputs.send_latest_ewhaian || 'false' }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: '3.10'
+          python-version: '3.11'
+
+      - name: Validate Actions secrets
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          required = ["FROM_EMAIL", "TO_EMAIL", "APP_PASSWORD"]
+          if os.environ.get("SEND_LATEST_EWHAIAN") == "true":
+              required += ["EWHA_ID", "EWHA_PW"]
+          missing = [name for name in required if not os.environ.get(name)]
+          if missing:
+              for name in missing:
+                  print(f"::error title=Actions Secret 누락::{name} 값이 이 작업에 전달되지 않았습니다.")
+              instructions = (
+                  "GitHub 저장소 Settings → Secrets and variables → Actions → Secrets에서 "
+                  "위 이름으로 값을 등록하세요. 클라우드 환경 설정의 변수는 자동 전달되지 않습니다. "
+                  "Secrets 변경 후 Re-run jobs로 다시 실행할 수 있습니다."
+              )
+              print(instructions)
+              summary = os.environ.get("GITHUB_STEP_SUMMARY")
+              if summary:
+                  with Path(summary).open("a", encoding="utf-8") as report:
+                      report.write("## 필수 설정 누락: 메일을 발송하지 않았습니다\n\n")
+                      report.write("\n".join(f"- `{name}`" for name in missing))
+                      report.write("\n\n" + instructions + "\n")
+              raise SystemExit(2)
+          print("필수 Actions Secrets가 전달되었습니다. 값은 출력하지 않습니다.")
+          PY
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          
-          # ⭐⭐⭐ 필요한 Python 라이브러리 설치 ⭐⭐⭐
-          # requests, beautifulsoup4는 기존에 사용하던 것
-          # playwright는 이화이언 CSR 해결을 위해 새로 추가
-          pip install requests beautifulsoup4 playwright
-          
-          # ⭐⭐⭐ Playwright 실행 환경 설정 ⭐⭐⭐
-          # 크롬 기반 브라우저 설치 (JavaScript 실행용)
-          playwright install chromium
+          python -m pip install -r requirements.txt
 
       - name: Run script
-        env:
-          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
-          TO_EMAIL: ${{ secrets.TO_EMAIL }}
-          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
-          EWHA_ID: ${{ secrets.EWHA_ID }}
-          EWHA_PW: ${{ secrets.EWHA_PW }}
-          GITHUB_ACTIONS: true
-          SEND_LATEST_EWHAIAN: ${{ github.event.inputs.send_latest_ewhaian || 'false' }}
         run: |
           if [ "$SEND_LATEST_EWHAIAN" = "true" ]; then
             python dongaupdate.py --send-latest-ewhaian

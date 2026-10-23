@@ -55,6 +55,20 @@ Secrets에 등록한 뒤, **Actions → Site Monitor → Run workflow**에서
 자동 전달되지 않습니다. Actions에서의 실제 SMTP 연결·메일 발송 성공 여부는
 해당 실행 로그로 확인해야 합니다.
 
+### Actions에서 종료 코드 2로 실패할 때
+
+`--send-latest-ewhaian` 시험 발송은 다섯 환경변수 중 하나라도 비어 있으면
+종료 코드 2로 중단합니다. **Validate Actions secrets** 단계와 실행 Summary에
+누락된 이름만 표시하며, 비밀번호나 이메일 값은 출력하지 않습니다.
+
+해당 이름을 GitHub 저장소 **Settings → Secrets and variables → Actions → Secrets**의
+Repository secret으로 등록하세요. 클라우드 환경 설정에만 등록한 값이나 GitHub의
+별도 **Variables** 탭 값은 이 워크플로의 `secrets.*`에 전달되지 않습니다.
+등록 후 **Re-run jobs**로 재시도할 수 있습니다. 워크플로 코드 자체가 바뀌었다면
+이전 실행을 재실행하는 대신 `main`에서 **Run workflow**로 새로 실행하세요.
+
+워크플로는 Ubuntu 24.04, Python 3.11과 Node.js 24 기반 액션을 사용합니다.
+
 이화이언은 사이트가 사용하는 로그인·목록 조회 API를 사용하므로 브라우저 설치가
 필요하지 않습니다. 사이트 API가 변경되거나 계정의 열람 권한이 없으면 로그를
 확인하세요. CAPTCHA나 추가 인증을 우회하지 않습니다.
