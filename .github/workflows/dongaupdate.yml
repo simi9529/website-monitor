@@ -10,6 +10,15 @@ on:
         required: false
         default: false
         type: boolean
+      test_canvas:
+        description: 'Canvas 통합 로그인 후 최신 공지·대화 링크를 시험 메일로 발송'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: site-monitor-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   run-script:
@@ -22,7 +31,10 @@ jobs:
       APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
       EWHA_ID: ${{ secrets.EWHA_ID }}
       EWHA_PW: ${{ secrets.EWHA_PW }}
+      CANVAS_ID: ${{ secrets.CANVAS_ID }}
+      CANVAS_PW: ${{ secrets.CANVAS_PW }}
       SEND_LATEST_EWHAIAN: ${{ github.event.inputs.send_latest_ewhaian || 'false' }}
+      TEST_CANVAS: ${{ github.event.inputs.test_canvas || 'false' }}
 
     steps:
       - name: Checkout repository
@@ -40,8 +52,13 @@ jobs:
           from pathlib import Path
 
           required = ["FROM_EMAIL", "TO_EMAIL", "APP_PASSWORD"]
+          if os.environ.get("SEND_LATEST_EWHAIAN") == "true" and os.environ.get("TEST_CANVAS") == "true":
+              print("::error::시험 발송 옵션은 한 번에 하나만 선택하세요.")
+              raise SystemExit(2)
           if os.environ.get("SEND_LATEST_EWHAIAN") == "true":
               required += ["EWHA_ID", "EWHA_PW"]
+          if os.environ.get("TEST_CANVAS") == "true":
+              required += ["CANVAS_ID", "CANVAS_PW"]
           missing = [name for name in required if not os.environ.get(name)]
           if missing:
               for name in missing:
@@ -67,9 +84,15 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
+      - name: Install Canvas login browser
+        if: env.CANVAS_ID != '' && env.CANVAS_PW != '' && env.SEND_LATEST_EWHAIAN != 'true'
+        run: python -m playwright install --with-deps chromium
+
       - name: Run script
         run: |
-          if [ "$SEND_LATEST_EWHAIAN" = "true" ]; then
+          if [ "$TEST_CANVAS" = "true" ]; then
+            python dongaupdate.py --test-canvas
+          elif [ "$SEND_LATEST_EWHAIAN" = "true" ]; then
             python dongaupdate.py --send-latest-ewhaian
           else
             python dongaupdate.py

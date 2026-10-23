@@ -210,6 +210,7 @@ class MonitorTests(unittest.TestCase):
     def test_other_site_failure_does_not_prevent_ewha_or_state_save(self):
         with patch.object(dongaupdate, "load_state", return_value={}), \
              patch.object(dongaupdate, "save_state") as save, \
+             patch.object(dongaupdate, "check_canvas_board"), \
              patch.object(dongaupdate, "check_donga_board", side_effect=RuntimeError), \
              patch.object(dongaupdate, "check_youtube_board") as youtube:
             self.fetch.return_value = [ewhaian.Post(102, "latest")]

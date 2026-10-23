@@ -10,6 +10,9 @@ import re  # 유튜브 파싱을 위한 정규표현식 모듈 추가
 from urllib.parse import urljoin
 from requests.exceptions import ReadTimeout, RequestException
 from ewhaian import EwhaianError, fetch_posts
+from canvas_lms import CanvasClient, CanvasError, STATE_KEY as CANVAS_STATE_KEY, monitor_canvas, notification_body
+from canvas_sso import sso_session
+from datetime import datetime, timedelta, timezone
 
 # ======================
 # 환경변수
@@ -308,6 +311,63 @@ def send_latest_ewhaian():
 
 
 # ======================
+# 동아대 Canvas: 공지사항 + 대화메시지
+# ======================
+def check_canvas_board(state):
+    username, password = os.environ.get("CANVAS_ID"), os.environ.get("CANVAS_PW")
+    if not username or not password:
+        print("⏭ [Canvas] CANVAS_ID 또는 CANVAS_PW 미설정 → 스킵")
+        return
+    try:
+        with sso_session(username, password) as session:
+            monitor_canvas(CanvasClient(session), state, send_email)
+    except CanvasError as error:
+        print(f"⚠️ [Canvas] {error}")
+
+
+def send_latest_canvas():
+    required = ["CANVAS_ID", "CANVAS_PW", "FROM_EMAIL", "TO_EMAIL", "APP_PASSWORD"]
+    missing = [name for name in required if not os.environ.get(name)]
+    if missing:
+        print("Canvas 시험 발송 불가: 실행 환경에 없는 변수: " + ", ".join(missing))
+        return 2
+    try:
+        state = load_state()
+        now = datetime.now(timezone.utc)
+        with sso_session(os.environ["CANVAS_ID"], os.environ["CANVAS_PW"]) as session:
+            client = CanvasClient(session)
+            notices, notice_state = client.poll_announcements({
+                "seen_ids": [], "checked_at": (now - timedelta(days=180)).isoformat(),
+            }, now=now)
+            messages, message_state = client.poll_messages({
+                "conversations": {}, "checked_at": "1970-01-01T00:00:00+00:00",
+            }, now=now)
+        samples = [max(events, key=lambda event: (event.created_at, event.url))
+                   for events in (notices, messages) if events]
+        if not samples:
+            print("✅ Canvas 로그인과 두 영역 조회 성공. 시험 메일에 담을 항목이 없어 발송하지 않았습니다")
+            return 0
+        send_email("[동아대 Canvas] 공지·대화 확인 — 시험 발송", notification_body(samples))
+    except CanvasError as error:
+        print(f"Canvas 시험 발송 실패: {error}")
+        return 1
+    except Exception as error:
+        print(f"Canvas 시험 발송 실패: {type(error).__name__} (인증 정보는 출력하지 않습니다)")
+        return 1
+    print("✅ Canvas 최신 항목 시험 메일을 SMTP 서버에 전달했습니다")
+    # Preserve established checkpoints so testing never discards pending alerts.
+    baseline = state.setdefault(CANVAS_STATE_KEY, {})
+    baseline.setdefault("announcements", notice_state)
+    baseline.setdefault("messages", message_state)
+    try:
+        save_state(state)
+    except Exception:
+        print("⚠️ Canvas 메일은 전달됐지만 시작 기준을 저장하지 못했습니다")
+        return 1
+    return 0
+
+
+# ======================
 # 메인 (최후 안전망)
 # ======================
 def main():
@@ -333,6 +393,11 @@ def main():
             check_ewhaian_board(state)
         except Exception:
             print("⚠️ [이화이언] 확인 실패 → 기존 사이트 상태는 저장")
+
+        try:
+            check_canvas_board(state)
+        except Exception:
+            print("⚠️ [Canvas] 확인 실패 → 기존 사이트 상태는 저장")
             
         save_state(state)
     except Exception as e:
@@ -343,11 +408,18 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--send-latest-ewhaian", action="store_true",
         help="실제 계정으로 로그인해 최신 글 링크를 담은 시험 메일 1통을 발송",
+    )
+    mode.add_argument(
+        "--test-canvas", action="store_true",
+        help="학교 통합 로그인 후 Canvas의 최신 공지·수신 메시지 링크를 시험 메일로 발송",
     )
     args = parser.parse_args()
     if args.send_latest_ewhaian:
         raise SystemExit(send_latest_ewhaian())
+    if args.test_canvas:
+        raise SystemExit(send_latest_canvas())
     main()
