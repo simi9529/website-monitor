@@ -7,6 +7,13 @@ self.addEventListener("push", (event) => {
   event.waitUntil((async () => {
     let payload;
     try { payload = event.data.json(); } catch (_) { payload = {}; }
+    if (payload.z) {
+      try {
+        const bytes = Uint8Array.from(atob(payload.z), (char) => char.charCodeAt(0));
+        const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate"));
+        payload = await new Response(stream).json();
+      } catch (_) { payload = { title: "알림을 읽지 못했습니다", body: "구독 페이지에서 연결을 확인해 주세요." }; }
+    }
     const links = Array.isArray(payload.links) ? payload.links.filter((item) => {
       try {
         const url = new URL(item.url);

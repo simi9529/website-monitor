@@ -10,7 +10,7 @@ import re  # 유튜브 파싱을 위한 정규표현식 모듈 추가
 from urllib.parse import urljoin
 from requests.exceptions import ReadTimeout, RequestException
 from ewhaian import EwhaianError, fetch_posts
-from canvas_lms import CanvasClient, CanvasError, STATE_KEY as CANVAS_STATE_KEY, monitor_canvas, notification_body
+from canvas_lms import CanvasClient, CanvasError, STATE_KEY as CANVAS_STATE_KEY, monitor_canvas, notification_body, notification_items
 from canvas_sso import sso_session
 from datetime import datetime, timedelta, timezone
 from mail_cleanup import MONITOR_HEADER, MONITOR_ID
@@ -79,8 +79,8 @@ def save_state(state):
 # ======================
 # 이메일
 # ======================
-def send_email(subject, body):
-    dispatch(subject, body, _send_smtp_email)
+def send_email(subject, body, *, push_items=None):
+    dispatch(subject, body, _send_smtp_email, push_items=push_items)
 
 
 def _send_smtp_email(subject, body):
@@ -247,7 +247,9 @@ def send_ewhaian_digest(posts, test=False):
         "[이화이언] life/66 최신 글 — 시험 발송"
         if test else f"[이화이언] life/66 새 글 {len(posts)}개"
     )
-    send_email(subject, f"[이화이언 life/66]\n\n게시글 {len(posts)}개\n\n{entries}")
+    send_email(subject, f"[이화이언 life/66]\n\n게시글 {len(posts)}개\n\n{entries}",
+               push_items=[{"id": post.url, "title": post.title, "body": "이화이언 life/66",
+                            "links": [{"title": post.title, "url": post.url}]} for post in posts])
 
 
 def check_ewhaian_board(state):
@@ -356,7 +358,8 @@ def send_latest_canvas():
         if not samples:
             print("✅ Canvas 로그인과 두 영역 조회 성공. 시험 알림에 담을 항목이 없어 발송하지 않았습니다")
             return 0
-        send_email("[동아대 Canvas] 공지·대화 확인 — 시험 발송", notification_body(samples))
+        send_email("[동아대 Canvas] 공지·대화 확인 — 시험 발송", notification_body(samples),
+                   push_items=notification_items(samples))
     except CanvasError as error:
         print(f"Canvas 시험 발송 실패: {error}")
         return 1

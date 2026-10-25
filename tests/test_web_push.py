@@ -1,8 +1,10 @@
 import base64
 import contextlib
 from copy import deepcopy
+from datetime import datetime, timezone
 import io
 import json
+import zlib
 import unittest
 from unittest.mock import Mock, patch
 
@@ -50,17 +52,23 @@ class WebPushTests(unittest.TestCase):
             with self.assertRaises(web_push.PushError):
                 web_push.channels()
 
-    def test_all_links_survive_large_digest_split_and_stable_tags(self):
+    def test_two_posts_make_two_notifications_with_all_links_kept_per_post(self):
         urls = ['https://example.com/' + str(i) + '?' + 'a' * 170 for i in range(40)]
         body = '\n\n'.join(f'{i}. 새 글\n{url}' for i, url in enumerate(urls))
-        result = web_push.payloads('새 글 40개', body)
-        self.assertEqual(len(result), 40)
-        self.assertTrue(all(len(json.loads(payload)['links']) == 1 for payload in result))
-        self.assertEqual(len({json.loads(payload)['tag'] for payload in result}), 40)
-        actual = [item['url'] for payload in result for item in json.loads(payload)['links']]
+        items = [{'id': str(i), 'title': f'글 {i}', 'links': [{'url': url, 'title': '첨부 링크'} for url in urls[i * 20:(i + 1) * 20]]}
+                 for i in range(2)]
+        result = web_push.payloads('새 글 2개', body, items=items)
+        self.assertEqual(len(result), 2)
+        decoded = []
+        for raw in result:
+            data = json.loads(raw)
+            decoded.append(json.loads(zlib.decompress(base64.b64decode(data['z']))) if 'z' in data else data)
+        self.assertTrue(all(len(payload['links']) == 20 for payload in decoded))
+        self.assertEqual(len({payload['tag'] for payload in decoded}), 2)
+        actual = [item['url'] for payload in decoded for item in payload['links']]
         self.assertEqual(actual, urls)
         self.assertTrue(all(len(payload.encode()) <= web_push.MAX_PAYLOAD_BYTES for payload in result))
-        self.assertEqual(web_push.payloads('새 글 40개', body), result)
+        self.assertEqual(web_push.payloads('새 글 2개', body, items=items), result)
 
     def test_real_encryption_and_vapid_signature_with_mocked_transport(self):
         response = requests.Response()
@@ -68,7 +76,7 @@ class WebPushTests(unittest.TestCase):
         response._content = b''
         with patch.dict('os.environ', self.config), patch('pywebpush.requests.post', return_value=response) as post:
             web_push.send_push('새 알림', '첫 글\nhttps://example.com/1\n둘째 글\nhttps://example.com/2')
-        self.assertEqual(post.call_count, 2)
+        self.assertEqual(post.call_count, 1)
         urls = []
         for call in post.call_args_list:
             ciphertext = call.kwargs['data']
@@ -76,8 +84,8 @@ class WebPushTests(unittest.TestCase):
             self.assertNotIn(b'https://example.com', ciphertext)
             plaintext = http_ece.decrypt(ciphertext, private_key=self.receiver, auth_secret=self.auth, version='aes128gcm')
             payload = json.loads(plaintext)
-            self.assertEqual(len(payload['links']), 1)
-            urls.append(payload['links'][0]['url'])
+            self.assertEqual(len(payload['links']), 2)
+            urls.extend(link['url'] for link in payload['links'])
         self.assertEqual(urls, ['https://example.com/1', 'https://example.com/2'])
         self.assertTrue(any(key.lower() == 'authorization' for key in post.call_args.kwargs['headers']))
 
@@ -90,6 +98,33 @@ class WebPushTests(unittest.TestCase):
                 with self.assertRaises(web_push.PushError):
                     web_push.send_push('title', 'body')
                 post.assert_not_called()
+
+    def test_two_canvas_posts_emit_two_pushes_and_keep_each_posts_links_together(self):
+        from canvas_lms import Notification, monitor_canvas
+        import dongaupdate
+        now = datetime.now(timezone.utc)
+        first = Notification('대화메시지', '첫 글', 'https://canvas.donga.ac.kr/conversations/1', now,
+                             ('https://example.com/a', 'https://example.com/b'))
+        second = Notification('공지사항', '둘째 글', 'https://canvas.donga.ac.kr/courses/1/discussion_topics/2', now)
+        client = Mock()
+        client.poll_announcements.return_value = ([second], {'seen_ids': ['1:2']})
+        client.poll_messages.return_value = ([first], {'conversations': {}})
+        response = requests.Response()
+        response.status_code = 201
+        response._content = b''
+        state = {}
+        web_push.bind_delivery_state(state)
+        with patch.dict('os.environ', self.config), patch('pywebpush.requests.post', return_value=response) as post, \
+                patch('dongaupdate._send_smtp_email') as email:
+            self.assertTrue(monitor_canvas(client, state, dongaupdate.send_email))
+            email.assert_not_called()
+        self.assertEqual(post.call_count, 2)
+        decoded = [json.loads(http_ece.decrypt(call.kwargs['data'], private_key=self.receiver,
+                                             auth_secret=self.auth, version='aes128gcm'))
+                   for call in post.call_args_list]
+        grouped = {payload['title']: [link['url'] for link in payload['links']] for payload in decoded}
+        self.assertEqual(grouped['[대화메시지] 첫 글'], ['https://example.com/a', 'https://example.com/b'])
+        self.assertEqual(grouped['[공지사항] 둘째 글'], [second.url])
 
     def test_expired_subscription_reports_no_private_response_or_endpoint(self):
         from pywebpush import WebPushException

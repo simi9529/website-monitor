@@ -220,6 +220,12 @@ def notification_body(events):
     )
 
 
+def notification_items(events):
+    return [{"id": event.url, "title": f"[{event.kind}] {event.title}", "body": event.kind,
+             "links": [{"title": event.title, "url": url} for url in event.links or (event.url,)]}
+            for event in events]
+
+
 def monitor_canvas(client, state, send_email):
     """Poll both areas independently and acknowledge only after a whole digest."""
     previous = state.get(STATE_KEY, {})
@@ -237,7 +243,8 @@ def monitor_canvas(client, state, send_email):
     events.sort(key=lambda event: (event.created_at, event.url))
     if events:
         try:
-            send_email(f"[동아대 Canvas] 새 알림 {len(events)}개", notification_body(events))
+            send_email(f"[동아대 Canvas] 새 알림 {len(events)}개", notification_body(events),
+                       push_items=notification_items(events))
         except Exception:
             print("⚠️ [Canvas] 발송 실패 → 모든 미발송 알림은 다음 회차에 재시도")
             return False

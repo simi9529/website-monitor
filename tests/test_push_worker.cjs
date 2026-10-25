@@ -15,7 +15,7 @@ function worker() {
     },
     clients: { openWindow: async (url) => { windows.push(url); } },
   };
-  vm.runInNewContext(fs.readFileSync('docs/sw.js', 'utf8'), { self, URL });
+  vm.runInNewContext(fs.readFileSync('docs/sw.js', 'utf8'), { self, URL, atob, Blob, Response, DecompressionStream });
   return { handlers, notifications, windows };
 }
 
@@ -47,4 +47,17 @@ test('a single valid link opens directly; unsafe links never open', async () => 
     await done;
     assert.equal(windows.at(-1), expected);
   }
+});
+
+test('a compressed post still produces one notification containing all its links', async () => {
+  const { deflateSync } = require('node:zlib');
+  const { handlers, notifications } = worker();
+  const links = Array.from({ length: 30 }, (_, i) => ({ title: '링크', url: `https://example.com/${i}` }));
+  const payload = { title: '글 하나', body: '첨부 링크 30개', links, tag: 'post-1' };
+  const encoded = deflateSync(Buffer.from(JSON.stringify(payload))).toString('base64');
+  let done;
+  handlers.push({ data: { json: () => ({ z: encoded }) }, waitUntil: (value) => { done = value; } });
+  await done;
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0].options.data.links.length, 30);
 });

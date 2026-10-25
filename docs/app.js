@@ -55,7 +55,10 @@ async function initialize() {
     registration = await navigator.serviceWorker.register("sw.js");
     await navigator.serviceWorker.ready;
     const subscription = await registration.pushManager.getSubscription();
-    if (subscription && Notification.permission === "granted") showSubscription(subscription);
+    const expectedKey = decodeKey(config.publicKey);
+    const keyMatches = subscription && subscription.options.applicationServerKey &&
+      String(new Uint8Array(subscription.options.applicationServerKey)) === String(expectedKey);
+    if (keyMatches && Notification.permission === "granted") showSubscription(subscription);
     else $("status").textContent = Notification.permission === "denied"
       ? "알림이 차단되어 있어요. 크롬 주소창의 사이트 설정에서 알림을 허용해 주세요."
       : "버튼을 누른 뒤 크롬의 알림 허용을 선택하세요.";

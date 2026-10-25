@@ -50,6 +50,10 @@ class CanvasClientTests(unittest.TestCase):
         self.assertIn('https://lecture.example/watch?a=1&b=2', body)
         self.assertIn('https://lecture.example/material.pdf', body)
         self.assertNotIn('/conversations/20', body)
+        from canvas_lms import notification_items
+        items = notification_items(events)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(len(items[0]['links']), 2)
         self.session.put.assert_not_called()
 
     def test_message_links_are_deduplicated_and_only_web_links_are_included(self):
@@ -188,6 +192,7 @@ class CanvasMonitorTests(unittest.TestCase):
                 state = {}
                 self.assertTrue(monitor_canvas(self.client, state, self.mail))
                 self.mail.assert_called_once()
+                self.assertEqual(len(self.mail.call_args.kwargs['push_items']), len(notices + messages))
                 body = self.mail.call_args.args[1]
                 for event in notices + messages:
                     self.assertIn(event.url, body)

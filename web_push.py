@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import zlib
 from urllib.parse import urlsplit
 
 
@@ -46,8 +47,8 @@ def _web_url(value):
         return False
 
 
-def payloads(subject, body):
-    """Emit exactly one notification per link, retaining every new link."""
+def payloads(subject, body, items=None):
+    """One post is one notification, including all of that post's links."""
     links = []
     label = subject
     for line in body.splitlines():
@@ -63,15 +64,21 @@ def payloads(subject, body):
             label = line.strip()
     if not links:
         links = [{"title": subject[:120], "url": PAGE_URL}]
+    if items is None:
+        items = [{"title": subject, "body": body[:200], "links": links}]
     result = []
-    for item in links:
-        data = {"title": item["title"][:120], "body": subject[:120], "links": [item]}
-        if len(json.dumps(data, ensure_ascii=False).encode()) > MAX_PAYLOAD_BYTES - 100:
-            data["body"] = "새 알림이 도착했습니다. 눌러서 링크를 확인하세요."
-        data["tag"] = hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()[:24]
-        encoded = json.dumps(data, ensure_ascii=False)
+    for item in items:
+        post_links = item.get("links", [])
+        if not post_links or any(not _web_url(link.get("url", "")) for link in post_links):
+            raise PushError("게시글 알림의 링크 형식을 확인하세요")
+        data = {"title": item["title"][:120], "body": item.get("body", subject)[:250], "links": post_links}
+        identity = item.get("id") or json.dumps(data, sort_keys=True)
+        data["tag"] = hashlib.sha256(identity.encode()).hexdigest()[:24]
+        encoded = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         if len(encoded.encode()) > MAX_PAYLOAD_BYTES:
-            raise PushError("푸시 알림 크기 한도를 초과했습니다. 알림 기준은 유지됩니다")
+            encoded = json.dumps({"z": base64.b64encode(zlib.compress(encoded.encode())).decode()})
+        if len(encoded.encode()) > MAX_PAYLOAD_BYTES:
+            raise PushError("게시글 1개의 푸시 크기 한도를 초과했습니다. 글을 나누거나 링크를 누락하지 않고 기준을 유지합니다")
         result.append(encoded)
     return result
 
@@ -99,12 +106,12 @@ def _subscriptions(raw):
         raise PushError("WEB_PUSH_SUBSCRIPTIONS 형식을 확인하세요. 폰 구독 페이지에서 다시 복사하세요") from None
 
 
-def send_push(subject, body):
+def send_push(subject, body, items=None):
     missing = [name for name in ("VAPID_PRIVATE_KEY", "WEB_PUSH_SUBSCRIPTIONS") if not os.environ.get(name)]
     if missing:
         raise PushError("크롬 푸시 설정 누락: " + ", ".join(missing))
     subscriptions = _subscriptions(os.environ["WEB_PUSH_SUBSCRIPTIONS"])
-    messages = payloads(subject, body)
+    messages = payloads(subject, body, items=items)
     try:
         from pywebpush import webpush, WebPushException
     except ImportError:
@@ -136,10 +143,10 @@ def bind_delivery_state(state):
     _state = state
 
 
-def dispatch(subject, body, email_sender):
+def dispatch(subject, body, email_sender, push_items=None):
     """Remember partial delivery without storing private titles/bodies in Git."""
     state = _state if _state is not None else {}
-    key = hashlib.sha256((subject + "\0" + body).encode()).hexdigest()
+    key = hashlib.sha256((subject + "\0" + body + json.dumps(push_items, sort_keys=True)).encode()).hexdigest()
     receipts = state.get("notification_delivery", {})
     delivered = list(receipts.get(key, []))
     failed = False
@@ -147,7 +154,10 @@ def dispatch(subject, body, email_sender):
         if channel in delivered:
             continue
         try:
-            (email_sender if channel == "email" else send_push)(subject, body)
+            if channel == "email":
+                email_sender(subject, body)
+            else:
+                send_push(subject, body, items=push_items)
         except PushError as error:
             print(f"⚠️ {error}")
             failed = True
