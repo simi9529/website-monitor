@@ -133,6 +133,7 @@ class MonitorTests(unittest.TestCase):
         self.assertIn("2개", subject)
         self.assertIn("1. first\nhttps://ewhaian.com/life/66/detail/101", body)
         self.assertIn("2. second\nhttps://ewhaian.com/life/66/detail/102", body)
+        self.assertEqual(len(self.mail.call_args.kwargs['push_items']), 2)
         self.assertEqual(state[self.key], "102")
         self.fetch.return_value = []
         dongaupdate.check_ewhaian_board(state)

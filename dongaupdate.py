@@ -7,7 +7,7 @@ import os
 import json
 import time
 import re  # 유튜브 파싱을 위한 정규표현식 모듈 추가
-from urllib.parse import urljoin
+from urllib.parse import parse_qs, urljoin, urlsplit
 from requests.exceptions import ReadTimeout, RequestException
 from ewhaian import EwhaianError, fetch_posts
 from canvas_lms import CanvasClient, CanvasError, STATE_KEY as CANVAS_STATE_KEY, monitor_canvas, notification_body, notification_items
@@ -129,7 +129,7 @@ def check_donga_board(board, state):
 
     soup = BeautifulSoup(res.text, "html.parser")
     rows = soup.select("table.bdListTbl tbody tr")
-
+    posts = {}
     for row in rows:
         num_td = row.select_one("td.num")
         subject_a = row.select_one("td.subject a")
@@ -147,26 +147,26 @@ def check_donga_board(board, state):
         if "board_seq=" not in href:
             continue
 
-        board_seq = href.split("board_seq=")[-1]
+        board_seq = parse_qs(urlsplit(href).query).get("board_seq", [""])[0]
+        if not board_seq.isdigit():
+            continue
         title = subject_a.text.strip()
         link = urljoin(board["url"], href)
-
-        last_seq = state.get(board["name"])
-
-        if last_seq != board_seq:
-            print(f"🆕 새 글 감지: {title}")
-            body = (
-                f"[{board['name']}]\n\n"
-                f"번호: {num}\n"
-                f"제목: {title}\n\n"
-                f"링크: {link}"
-            )
-            send_email(f"[동아대] {board['name']} 새 글", body)
-            state[board["name"]] = board_seq
-        else:
-            print("🔁 변화 없음")
-
-        break  # 최신 일반글 1개만 확인
+        posts[int(board_seq)] = (num, title, link)
+    last_seq = state.get(board["name"])
+    if not posts:
+        return
+    pending = ([max(posts)] if last_seq is None else
+               [seq for seq in sorted(posts) if seq > int(last_seq)])
+    for seq in pending:
+        num, title, link = posts[seq]
+        body = f"[{board['name']}]\n\n번호: {num}\n제목: {title}\n\n링크: {link}"
+        send_email(f"[동아대] {board['name']} 새 글", body,
+                   push_items=[{"id": link, "title": title, "body": board['name'],
+                                "links": [{"title": title, "url": link}]}])
+        state[board["name"]] = str(seq)
+    if not pending:
+        print("🔁 변화 없음")
 
 # ======================
 # 유튜브 커뮤니티 체크 (신규)
@@ -201,34 +201,38 @@ def check_youtube_board(board, state):
             print(f"⚠️ [{board['name']}] 게시물 목록이 비어있습니다.")
             return
 
+        state_key = f"youtube_{board['name']}"
+        last_post_id = state.get(state_key)
+        pending = []
+        found_previous = False
         for item in community_items:
             if "backstagePostThreadRenderer" in item:
                 post = item["backstagePostThreadRenderer"]["post"]["backstagePostRenderer"]
                 post_id = post.get("postId", "")
+                if not post_id:
+                    continue
+                if post_id == last_post_id:
+                    found_previous = True
+                    break
+                pending.append(post)
+                if last_post_id is None:
+                    break
+        if last_post_id is not None and not found_previous:
+            print(f"⚠️ [{board['name']}] 현재 목록에서 이전 글을 찾지 못했습니다 → 기준 유지")
+            return
+        for post in reversed(pending):
+            post_id = post['postId']
 
-                # 여러 줄로 나뉜 텍스트 합치기
-                runs = post.get("contentText", {}).get("runs", [])
-                text_content = "".join([r.get("text", "") for r in runs]).strip()
-                preview_text = text_content[:30] + "..." if len(text_content) > 30 else text_content
+            # 여러 줄로 나뉜 텍스트 합치기
+            runs = post.get("contentText", {}).get("runs", [])
+            text_content = "".join([r.get("text", "") for r in runs]).strip()
+            preview_text = text_content[:30] + "..." if len(text_content) > 30 else text_content
 
-                post_link = f"https://www.youtube.com/post/{post_id}"
-                state_key = f"youtube_{board['name']}"
-                last_post_id = state.get(state_key)
-
-                if last_post_id != post_id:
-                    print(f"🆕 유튜브 새 글 감지: {preview_text}")
-                    body = (
-                        f"[{board['name']} 유튜브 새 커뮤니티 글]\n\n"
-                        f"내용:\n{text_content}\n\n"
-                        f"링크: {post_link}"
-                    )
-                    send_email(f"[유튜브] {board['name']} 새 글", body)
-                    state[state_key] = post_id
-                else:
-                    print("🔁 유튜브 변화 없음")
-
-                break  # 최신 글 1개만 확인
-
+            post_link = f"https://www.youtube.com/post/{post_id}"
+            body = (f"[{board['name']} 유튜브 새 커뮤니티 글]\n\n"
+                    f"내용:\n{text_content}\n\n링크: {post_link}")
+            send_email(f"[유튜브] {board['name']} 새 글", body)
+            state[state_key] = post_id
     except Exception as e:
         print(f"⚠️ [{board['name']}] 파싱 중 오류 발생: {e}")
 
