@@ -15,6 +15,11 @@ on:
         required: false
         default: false
         type: boolean
+      test_push:
+        description: '폰 크롬 연결 시험 알림 발송 (사이트 로그인과 이메일 발송 없음)'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: site-monitor-${{ github.ref }}
@@ -36,6 +41,10 @@ jobs:
       CANVAS_REPLACE_SESSION: 'true' # 사용자가 학교 포털 기존 연결 종료를 허용함
       SEND_LATEST_EWHAIAN: ${{ github.event.inputs.send_latest_ewhaian || 'false' }}
       TEST_CANVAS: ${{ github.event.inputs.test_canvas || 'false' }}
+      TEST_PUSH: ${{ github.event.inputs.test_push || 'false' }}
+      VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+      WEB_PUSH_SUBSCRIPTIONS: ${{ secrets.WEB_PUSH_SUBSCRIPTIONS }}
+      NOTIFICATION_CHANNELS: ${{ vars.NOTIFICATION_CHANNELS || 'auto' }}
 
     steps:
       - name: Checkout repository
@@ -51,9 +60,12 @@ jobs:
           python - <<'PY'
           import os
           from pathlib import Path
+          from web_push import required_variables
 
-          required = ["FROM_EMAIL", "TO_EMAIL", "APP_PASSWORD"]
-          if os.environ.get("SEND_LATEST_EWHAIAN") == "true" and os.environ.get("TEST_CANVAS") == "true":
+          flags = [os.environ.get(name) == "true" for name in ("SEND_LATEST_EWHAIAN", "TEST_CANVAS", "TEST_PUSH")]
+          required = (["VAPID_PRIVATE_KEY", "WEB_PUSH_SUBSCRIPTIONS"]
+                      if flags[2] else required_variables())
+          if sum(flags) > 1:
               print("::error::시험 발송 옵션은 한 번에 하나만 선택하세요.")
               raise SystemExit(2)
           if os.environ.get("SEND_LATEST_EWHAIAN") == "true":
@@ -86,12 +98,14 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Install Canvas login browser
-        if: env.CANVAS_ID != '' && env.CANVAS_PW != '' && env.SEND_LATEST_EWHAIAN != 'true'
+        if: env.CANVAS_ID != '' && env.CANVAS_PW != '' && env.SEND_LATEST_EWHAIAN != 'true' && env.TEST_PUSH != 'true'
         run: python -m playwright install --with-deps chromium
 
       - name: Run script
         run: |
-          if [ "$TEST_CANVAS" = "true" ]; then
+          if [ "$TEST_PUSH" = "true" ]; then
+            python dongaupdate.py --test-push
+          elif [ "$TEST_CANVAS" = "true" ]; then
             python dongaupdate.py --test-canvas
           elif [ "$SEND_LATEST_EWHAIAN" = "true" ]; then
             python dongaupdate.py --send-latest-ewhaian

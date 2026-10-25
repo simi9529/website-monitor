@@ -14,6 +14,7 @@ from canvas_lms import CanvasClient, CanvasError, STATE_KEY as CANVAS_STATE_KEY,
 from canvas_sso import sso_session
 from datetime import datetime, timedelta, timezone
 from mail_cleanup import MONITOR_HEADER, MONITOR_ID
+from web_push import bind_delivery_state, dispatch, required_variables, test_push
 
 # ======================
 # 환경변수
@@ -79,6 +80,10 @@ def save_state(state):
 # 이메일
 # ======================
 def send_email(subject, body):
+    dispatch(subject, body, _send_smtp_email)
+
+
+def _send_smtp_email(subject, body):
     msg = MIMEText(body)
     msg["Subject"] = subject
     msg["From"] = FROM_EMAIL
@@ -273,21 +278,22 @@ def check_ewhaian_board(state):
         send_ewhaian_digest(posts)
     except Exception:
         # Retry the whole digest without losing any unsent post links.
-        print("⚠️ [이화이언] 이메일 발송 실패 → 모든 미발송 글을 다음 회차에 재시도")
+        print("⚠️ [이화이언] 알림 발송 실패 → 모든 미발송 글을 다음 회차에 재시도")
         return
     state[EWHA_STATE_KEY] = str(posts[-1].id)
-    print(f"✅ [이화이언] 새 글 {len(posts)}개의 링크를 메일 1통으로 발송 완료")
+    print(f"✅ [이화이언] 새 글 {len(posts)}개의 링크 알림 전송 완료")
 
 
 def send_latest_ewhaian():
     """Send one real test message and initialize a missing local checkpoint."""
-    required = ["EWHA_ID", "EWHA_PW", "FROM_EMAIL", "TO_EMAIL", "APP_PASSWORD"]
+    required = ["EWHA_ID", "EWHA_PW"] + required_variables()
     missing = [name for name in required if not os.environ.get(name)]
     if missing:
         print("시험 발송 불가: 실행 환경에 없는 변수: " + ", ".join(missing))
         return 2
     try:
         state = load_state()
+        bind_delivery_state(state)
         posts = fetch_posts(os.environ["EWHA_ID"], os.environ["EWHA_PW"])
         if not posts:
             print("시험 발송 불가: 최신 게시글을 찾지 못했습니다")
@@ -300,7 +306,7 @@ def send_latest_ewhaian():
     except Exception as error:
         print(f"시험 발송 실패: {type(error).__name__} (인증 정보는 출력하지 않습니다)")
         return 1
-    print("✅ 실제 로그인 후 최신 글 링크를 포함한 시험 메일을 SMTP 서버에 전달했습니다")
+    print("✅ 실제 로그인 후 최신 글 링크를 포함한 시험 알림을 전송했습니다")
     # Do not skip previously unnotified posts if a monitor is already running.
     if not str(state.get(EWHA_STATE_KEY)).isdigit():
         state[EWHA_STATE_KEY] = str(latest.id)
@@ -328,13 +334,14 @@ def check_canvas_board(state):
 
 
 def send_latest_canvas():
-    required = ["CANVAS_ID", "CANVAS_PW", "FROM_EMAIL", "TO_EMAIL", "APP_PASSWORD"]
+    required = ["CANVAS_ID", "CANVAS_PW"] + required_variables()
     missing = [name for name in required if not os.environ.get(name)]
     if missing:
         print("Canvas 시험 발송 불가: 실행 환경에 없는 변수: " + ", ".join(missing))
         return 2
     try:
         state = load_state()
+        bind_delivery_state(state)
         now = datetime.now(timezone.utc)
         with sso_session(os.environ["CANVAS_ID"], os.environ["CANVAS_PW"]) as session:
             client = CanvasClient(session)
@@ -347,7 +354,7 @@ def send_latest_canvas():
         samples = [max(events, key=lambda event: (event.created_at, event.url))
                    for events in (notices, messages) if events]
         if not samples:
-            print("✅ Canvas 로그인과 두 영역 조회 성공. 시험 메일에 담을 항목이 없어 발송하지 않았습니다")
+            print("✅ Canvas 로그인과 두 영역 조회 성공. 시험 알림에 담을 항목이 없어 발송하지 않았습니다")
             return 0
         send_email("[동아대 Canvas] 공지·대화 확인 — 시험 발송", notification_body(samples))
     except CanvasError as error:
@@ -356,7 +363,7 @@ def send_latest_canvas():
     except Exception as error:
         print(f"Canvas 시험 발송 실패: {type(error).__name__} (인증 정보는 출력하지 않습니다)")
         return 1
-    print("✅ Canvas 최신 항목 시험 메일을 SMTP 서버에 전달했습니다")
+    print("✅ Canvas 최신 항목 시험 알림을 전송했습니다")
     # Preserve established checkpoints so testing never discards pending alerts.
     baseline = state.setdefault(CANVAS_STATE_KEY, {})
     baseline.setdefault("announcements", notice_state)
@@ -364,7 +371,7 @@ def send_latest_canvas():
     try:
         save_state(state)
     except Exception:
-        print("⚠️ Canvas 메일은 전달됐지만 시작 기준을 저장하지 못했습니다")
+        print("⚠️ Canvas 알림은 전달됐지만 시작 기준을 저장하지 못했습니다")
         return 1
     return 0
 
@@ -375,6 +382,7 @@ def send_latest_canvas():
 def main():
     try:
         state = load_state()
+        bind_delivery_state(state)
         
         # 동아대 점검
         for board in DONGA_BOARDS:
@@ -419,7 +427,10 @@ if __name__ == "__main__":
         "--test-canvas", action="store_true",
         help="학교 통합 로그인 후 Canvas의 최신 공지·수신 메시지 링크를 시험 메일로 발송",
     )
+    mode.add_argument("--test-push", action="store_true", help="사이트 로그인 없이 크롬 연결 시험 알림 발송")
     args = parser.parse_args()
+    if args.test_push:
+        raise SystemExit(test_push())
     if args.send_latest_ewhaian:
         raise SystemExit(send_latest_ewhaian())
     if args.test_canvas:
