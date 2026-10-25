@@ -13,7 +13,6 @@ from ewhaian import EwhaianError, fetch_posts
 from canvas_lms import CanvasClient, CanvasError, STATE_KEY as CANVAS_STATE_KEY, monitor_canvas, notification_body, notification_items
 from canvas_sso import sso_session
 from datetime import datetime, timedelta, timezone
-from mail_cleanup import MONITOR_HEADER, MONITOR_ID
 from web_push import bind_delivery_state, dispatch, required_variables, test_push
 
 # ======================
@@ -92,7 +91,6 @@ def _send_smtp_email(subject, body):
     msg["Subject"] = subject
     msg["From"] = FROM_EMAIL
     msg["To"] = TO_EMAIL
-    msg[MONITOR_HEADER] = MONITOR_ID
 
     with smtplib.SMTP_SSL(
         "smtp.gmail.com", 465, timeout=20, context=ssl.create_default_context()
