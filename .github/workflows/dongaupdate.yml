@@ -20,6 +20,11 @@ on:
         required: false
         default: false
         type: boolean
+      test_push_url:
+        description: 'test_push 시험 알림을 눌렀을 때 열 주소 (비우면 알림 설정 페이지)'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: site-monitor-${{ github.ref }}
@@ -42,6 +47,7 @@ jobs:
       SEND_LATEST_EWHAIAN: ${{ github.event.inputs.send_latest_ewhaian || 'false' }}
       TEST_CANVAS: ${{ github.event.inputs.test_canvas || 'false' }}
       TEST_PUSH: ${{ github.event.inputs.test_push || 'false' }}
+      TEST_PUSH_URL: ${{ github.event.inputs.test_push_url || '' }}
       VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
       WEB_PUSH_SUBSCRIPTIONS: ${{ secrets.WEB_PUSH_SUBSCRIPTIONS }}
       NOTIFICATION_CHANNELS: ${{ vars.NOTIFICATION_CHANNELS || 'auto' }}

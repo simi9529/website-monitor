@@ -177,7 +177,11 @@ def dispatch(subject, body, email_sender, push_items=None):
 
 def test_push():
     try:
-        send_push("크롬 알림 연결 확인", "이 알림이 폰에 표시되면 연결 성공입니다.\n" + PAGE_URL)
+        url = os.environ.get("TEST_PUSH_URL") or PAGE_URL
+        if not _web_url(url):
+            raise PushError("시험 알림 주소는 올바른 HTTP/HTTPS 링크여야 합니다")
+        title = "크롬 알림 연결 확인" if url == PAGE_URL else "링크 이동 시험"
+        send_push(title, "알림을 누르면 아래 주소로 이동합니다.\n" + url)
         return 0
     except PushError as error:
         print(str(error))
