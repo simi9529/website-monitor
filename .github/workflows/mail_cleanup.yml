@@ -1,0 +1,49 @@
+name: Kakao Mail Cleanup
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      apply_cleanup:
+        description: '24시간 지난 모니터링 메일을 실제로 휴지통 이동 (끄면 미리보기)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: kakao-mail-cleanup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+      TO_EMAIL: ${{ secrets.TO_EMAIL }}
+      KAKAO_IMAP_PASSWORD: ${{ secrets.KAKAO_IMAP_PASSWORD }}
+      KAKAO_IMAP_ID: ${{ secrets.KAKAO_IMAP_ID }}
+      APPLY_CLEANUP: ${{ github.event_name == 'schedule' || inputs.apply_cleanup }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Clean up monitor emails
+        run: |
+          if [ -z "$KAKAO_IMAP_PASSWORD" ]; then
+            echo "카카오메일 정리 미실행: GitHub Actions Secret KAKAO_IMAP_PASSWORD를 등록하세요."
+            if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then exit 2; fi
+            exit 0
+          fi
+          if [ "$APPLY_CLEANUP" = "true" ]; then
+            python mail_cleanup.py --apply
+          else
+            python mail_cleanup.py
+          fi
