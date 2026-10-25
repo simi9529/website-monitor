@@ -60,6 +60,10 @@ YOUTUBE_BOARDS = [
      {
         "name": "공모주린이2",
         "url": "https://www.youtube.com/@%EA%B3%B5%EB%AA%A8%EC%A3%BC%EB%A6%B0%EC%9D%B42/posts"
+    },
+    {
+        "name": "공모주투자의법칙",
+        "url": "https://www.youtube.com/@%EA%B3%B5%EB%AA%A8%EC%A3%BC%ED%88%AC%EC%9E%90%EC%9D%98%EB%B2%95%EC%B9%99/posts"
     }
 ]
 
@@ -171,6 +175,30 @@ def check_donga_board(board, state):
 # ======================
 # 유튜브 커뮤니티 체크 (신규)
 # ======================
+def youtube_posts(data):
+    """Read posts from the selected posts tab, including modern rich grids."""
+    tabs = data.get("contents", {}).get("twoColumnBrowseResultsRenderer", {}).get("tabs", [])
+    posts = {}
+
+    def walk(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key in ("backstagePostRenderer", "postRenderer") and isinstance(child, dict) and child.get("postId"):
+                    posts.setdefault(child["postId"], child)
+                else:
+                    walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+
+    for tab in tabs:
+        tab = tab.get("tabRenderer", {})
+        url = tab.get("endpoint", {}).get("commandMetadata", {}).get("webCommandMetadata", {}).get("url", "")
+        if "/posts" in url or "/community" in url or tab.get("selected"):
+            walk(tab.get("content", {}))
+    return list(posts.values())
+
+
 def check_youtube_board(board, state):
     print(f"🔍 [{board['name']}] 유튜브 확인 중...")
 
@@ -187,36 +215,24 @@ def check_youtube_board(board, state):
     try:
         yt_data = json.loads(match.group(1))
 
-        # 탭 목록에서 posts 탭 컨텐츠 찾기
-        tabs = yt_data.get("contents", {}).get("twoColumnBrowseResultsRenderer", {}).get("tabs", [])
-        community_items = []
-
-        for tab in tabs:
-            tab_url = tab.get("tabRenderer", {}).get("endpoint", {}).get("commandMetadata", {}).get("webCommandMetadata", {}).get("url", "")
-            if "/posts" in tab_url or "/community" in tab_url:
-                community_items = tab["tabRenderer"].get("content", {}).get("sectionListRenderer", {}).get("contents", [])[0].get("itemSectionRenderer", {}).get("contents", [])
-                break
-
-        if not community_items:
+        posts = youtube_posts(yt_data)
+        if not posts:
             print(f"⚠️ [{board['name']}] 게시물 목록이 비어있습니다.")
             return
 
         state_key = f"youtube_{board['name']}"
         last_post_id = state.get(state_key)
+        if last_post_id is None:
+            state[state_key] = posts[0]['postId']
+            print(f"✅ [{board['name']}] 최초 확인 완료 → 다음 새 글부터 알림")
+            return
         pending = []
         found_previous = False
-        for item in community_items:
-            if "backstagePostThreadRenderer" in item:
-                post = item["backstagePostThreadRenderer"]["post"]["backstagePostRenderer"]
-                post_id = post.get("postId", "")
-                if not post_id:
-                    continue
-                if post_id == last_post_id:
-                    found_previous = True
-                    break
-                pending.append(post)
-                if last_post_id is None:
-                    break
+        for post in posts:
+            if post['postId'] == last_post_id:
+                found_previous = True
+                break
+            pending.append(post)
         if last_post_id is not None and not found_previous:
             print(f"⚠️ [{board['name']}] 현재 목록에서 이전 글을 찾지 못했습니다 → 기준 유지")
             return

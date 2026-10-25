@@ -57,6 +57,21 @@ class PublicNotificationsTests(unittest.TestCase):
             dongaupdate.check_donga_board(board, state)
         self.assertEqual(state[board['name']], '101')
 
+    def test_new_youtube_channel_baseline_reads_modern_grid_without_old_notifications(self):
+        posts = [{'postRenderer': {'postId': 'latest', 'contentText': {'runs': [{'text': '최신 글'}]}}},
+                 {'postRenderer': {'postId': 'older', 'contentText': {'runs': []}}}]
+        data = {'contents': {'twoColumnBrowseResultsRenderer': {'tabs': [{'tabRenderer': {
+            'selected': True, 'content': {'richGridRenderer': {'contents': [
+                {'richItemRenderer': {'content': post}} for post in posts
+            ]}}
+        }}]}}}
+        self.get.return_value = Mock(status_code=200, text='<script>var ytInitialData = ' + json.dumps(data) + ';</script>')
+        board = next(board for board in dongaupdate.YOUTUBE_BOARDS if board['name'] == '공모주투자의법칙')
+        state = {}
+        dongaupdate.check_youtube_board(board, state)
+        self.assertEqual(state['youtube_공모주투자의법칙'], 'latest')
+        self.send.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

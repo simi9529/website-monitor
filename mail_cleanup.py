@@ -51,7 +51,7 @@ def is_monitor_mail(message, sender, recipient):
         "[이화이언] life/66 최신 글 — 시험 발송",
         *{f"[동아대] 동아대 law {name} 새 글"
           for name in ("학사공지", "수업공지", "특강및 모의고사")},
-        *{f"[유튜브] {name} 새 글" for name in ("공모주린이", "공모주린이2")},
+        *{f"[유튜브] {name} 새 글" for name in ("공모주린이", "공모주린이2", "공모주투자의법칙")},
     }:
         return True
     return bool(re.fullmatch(
