@@ -107,6 +107,7 @@ $("test").addEventListener("click", async () => {
     await registration.showNotification("알림 표시 시험", {
       body: "이 기기에서 알림을 표시할 수 있습니다. 실제 서버 연결은 GitHub의 test_push로 확인하세요.",
       tag: "local-test", icon: "icon.svg", data: { links: [{ url: location.href, title: "알림 설정" }] },
+      actions: [{ action: "open-link", title: "링크 바로가기" }],
     });
   } catch (_) {
     $("status").textContent = "폰 설정에서 크롬 알림이 허용되어 있는지 확인해 주세요.";

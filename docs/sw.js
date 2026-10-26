@@ -23,6 +23,7 @@ self.addEventListener("push", (event) => {
     await self.registration.showNotification(String(payload.title || "새 글 알림"), {
       body: String(payload.body || "새 알림이 도착했습니다.") + (links.length > 1 ? `\n링크 ${links.length}개 · 눌러서 모두 보기` : ""),
       icon: "icon.svg", tag: String(payload.tag || "website-monitor"),
+      actions: [{ action: "open-link", title: links.length > 1 ? "링크 모두 보기" : "링크 바로가기" }],
       renotify: false, data: { title: String(payload.title || "새 글 알림"), links },
     });
   })());

@@ -27,6 +27,7 @@ test('background push shows all links and a multi-link tap opens a private fragm
   await done;
   assert.equal(notifications[0].options.data.links.length, 2);
   assert.equal(notifications[0].options.renotify, false);
+  assert.equal(notifications[0].options.actions[0].title, '링크 모두 보기');
   handlers.notificationclick({ notification: { close() {}, data: notifications[0].options.data }, waitUntil: (value) => { done = value; } });
   await done;
   const url = new URL(windows[0]);
@@ -43,7 +44,7 @@ test('a single valid link opens directly; unsafe links never open', async () => 
     ['https://user:secret@example.com', 'https://simi9529.github.io/website-monitor/'],
   ]) {
     let done;
-    handlers.notificationclick({ notification: { close() {}, data: { links: [{ url }] } }, waitUntil: (value) => { done = value; } });
+    handlers.notificationclick({ action: 'open-link', notification: { close() {}, data: { links: [{ url }] } }, waitUntil: (value) => { done = value; } });
     await done;
     assert.equal(windows.at(-1), expected);
   }
