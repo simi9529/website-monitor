@@ -1,9 +1,7 @@
 name: Site Monitor
 
 on:
-  schedule:
-    - cron: '*/5 * * * *'  # 5분마다 실행
-  workflow_dispatch:        # 수동 실행 버튼
+  workflow_dispatch:        # cron-job.org의 5분 간격 호출 및 수동 실행
     inputs:
       send_latest_ewhaian:
         description: '이화이언 최신 글 링크를 담은 시험 메일 1통 발송'

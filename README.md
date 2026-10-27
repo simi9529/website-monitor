@@ -17,7 +17,7 @@
 하나면 바로 이동합니다. 큰 글은 압축하며 압축 후에도 푸시 크기 한도를 넘으면
 링크를 누락하거나 글을 나누지 않고 발송 실패로 처리해 기준을 유지합니다. Chrome·Android가
 알림을 묶어 표시할 수 있으며, 실제 팝업 표시는 폰의 알림·절전 설정을 따릅니다.
-모니터링 간격은 기존 Actions 예약 주기이며 사이트를 실시간 감시하는 기능은 아닙니다.
+cron-job.org가 5분 간격으로 Actions 실행을 요청하며, 실행 시각은 서비스 상황에 따라 지연될 수 있습니다.
 동아대 공개 게시판·유튜브도 조회된 목록의 새 글들을 각각 전송합니다. 공개 게시판은
 현재 목록 범위를 확인하며, 유튜브에서 이전 기준 글을 찾지 못하면 기준을 유지하고
 로그에 표시합니다. 페이지 밖으로 밀린 오래된 미발송 글의 전체 수집은 별도 확인이 필요합니다.
@@ -58,7 +58,9 @@ python tools/setup_web_push.py --private-key /저장소밖경로/vapid-private.t
 
 ## 실행 설정
 
-기존 `.github/workflows/dongaupdate.yml`이 5분마다 `dongaupdate.py`를 실행합니다.
+cron-job.org가 5분마다 `.github/workflows/dongaupdate.yml`을 `workflow_dispatch`로 호출하여 `dongaupdate.py`를 실행합니다. 중복 실행을 막기 위해 GitHub 자체 `schedule`은 제거했습니다.
+
+외부 작업은 POST `https://api.github.com/repos/simi9529/website-monitor/actions/workflows/dongaupdate.yml/dispatches`, JSON 본문 `{"ref":"main"}`을 사용합니다. 인증은 이 저장소의 Actions Read and write 권한을 가진 fine-grained 토큰을 Authorization Bearer 헤더에 등록합니다. 토큰은 cron-job.org의 비밀 설정에만 저장하고 코드·로그·채팅에는 넣지 않습니다. 토큰 만료 시 갱신해야 합니다. HTTP 204는 실행 요청 접수이며 실제 완료는 Actions 실행 결과로 확인합니다. 외부 작업을 활성화하고 만료 일정은 끄세요.
 GitHub 저장소의 **Settings → Secrets and variables → Actions → Secrets**에
 다음 값을 등록하세요. 클라우드 환경의 변수는 GitHub Actions로 자동 복사되지 않습니다.
 
