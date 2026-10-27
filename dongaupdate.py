@@ -257,6 +257,9 @@ EWHA_STATE_KEY = "ewhaian_life_66"
 
 
 def send_ewhaian_digest(posts, test=False):
+    posts = [post for post in posts if "과외" not in post.title]
+    if not posts:
+        return
     entries = "\n\n".join(
         f"{index}. {post.title}\n{post.url}"
         for index, post in enumerate(posts, start=1)
@@ -294,14 +297,16 @@ def check_ewhaian_board(state):
         print("✅ [이화이언] 최초 확인 완료 → 다음 새 글부터 알림")
         return
 
+    eligible = [post for post in posts if "과외" not in post.title]
     try:
-        send_ewhaian_digest(posts)
+        if eligible:
+            send_ewhaian_digest(eligible)
     except Exception:
         # Retry the whole digest without losing any unsent post links.
         print("⚠️ [이화이언] 알림 발송 실패 → 모든 미발송 글을 다음 회차에 재시도")
         return
     state[EWHA_STATE_KEY] = str(posts[-1].id)
-    print(f"✅ [이화이언] 새 글 {len(posts)}개의 링크 알림 전송 완료")
+    print(f"✅ [이화이언] 알림 {len(eligible)}개, 제목에 과외 포함 {len(posts) - len(eligible)}개 제외")
 
 
 def send_latest_ewhaian():

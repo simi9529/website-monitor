@@ -153,6 +153,30 @@ class MonitorTests(unittest.TestCase):
         self.assertIn("/detail/101", self.mail.call_args.args[1])
         self.assertIn("/detail/102", self.mail.call_args.args[1])
 
+    def test_tutoring_titles_are_excluded_but_checkpoint_includes_them(self):
+        state = {self.key: '100'}
+        self.fetch.return_value = [ewhaian.Post(101, '매장 알바'), ewhaian.Post(102, '영어과외 구합니다')]
+        dongaupdate.check_ewhaian_board(state)
+        self.assertEqual(state[self.key], '102')
+        self.mail.assert_called_once()
+        self.assertIn('/detail/101', self.mail.call_args.args[1])
+        self.assertNotIn('/detail/102', self.mail.call_args.args[1])
+        self.assertEqual(len(self.mail.call_args.kwargs['push_items']), 1)
+
+    def test_all_tutoring_posts_advance_checkpoint_without_notification(self):
+        state = {self.key: '100'}
+        self.fetch.return_value = [ewhaian.Post(101, '과외 선생님'), ewhaian.Post(102, '수학 과외')]
+        dongaupdate.check_ewhaian_board(state)
+        self.assertEqual(state[self.key], '102')
+        self.mail.assert_not_called()
+
+    def test_failed_non_tutoring_notification_retains_checkpoint(self):
+        state = {self.key: '100'}
+        self.fetch.return_value = [ewhaian.Post(101, '일반 알바'), ewhaian.Post(102, '과외')]
+        self.mail.side_effect = RuntimeError('temporary')
+        dongaupdate.check_ewhaian_board(state)
+        self.assertEqual(state[self.key], '100')
+
     def test_latest_test_email_initializes_checkpoint_only_after_smtp_success(self):
         self.fetch.return_value = [ewhaian.Post(101, "older"), ewhaian.Post(102, "latest")]
         with patch.dict("os.environ", {"FROM_EMAIL": "", "TO_EMAIL": "", "APP_PASSWORD": ""}):
