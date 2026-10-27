@@ -254,10 +254,11 @@ def check_youtube_board(board, state):
 # 이화이언 로그인 게시판
 # ======================
 EWHA_STATE_KEY = "ewhaian_life_66"
+EWHA_EXCLUDED_TITLE_WORDS = ("과외", "강사")
 
 
 def send_ewhaian_digest(posts, test=False):
-    posts = [post for post in posts if "과외" not in post.title]
+    posts = [post for post in posts if not any(word in post.title for word in EWHA_EXCLUDED_TITLE_WORDS)]
     if not posts:
         return
     entries = "\n\n".join(
@@ -297,7 +298,7 @@ def check_ewhaian_board(state):
         print("✅ [이화이언] 최초 확인 완료 → 다음 새 글부터 알림")
         return
 
-    eligible = [post for post in posts if "과외" not in post.title]
+    eligible = [post for post in posts if not any(word in post.title for word in EWHA_EXCLUDED_TITLE_WORDS)]
     try:
         if eligible:
             send_ewhaian_digest(eligible)
@@ -306,7 +307,7 @@ def check_ewhaian_board(state):
         print("⚠️ [이화이언] 알림 발송 실패 → 모든 미발송 글을 다음 회차에 재시도")
         return
     state[EWHA_STATE_KEY] = str(posts[-1].id)
-    print(f"✅ [이화이언] 알림 {len(eligible)}개, 제목에 과외 포함 {len(posts) - len(eligible)}개 제외")
+    print(f"✅ [이화이언] 알림 {len(eligible)}개, 제목 제외 단어 포함 {len(posts) - len(eligible)}개 제외")
 
 
 def send_latest_ewhaian():
