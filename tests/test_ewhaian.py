@@ -173,13 +173,15 @@ class MonitorTests(unittest.TestCase):
     def test_instructor_and_tutoring_titles_are_both_excluded(self):
         state = {self.key: '100'}
         self.fetch.return_value = [ewhaian.Post(101, '카페 알바'),
-                                  ewhaian.Post(102, '학원 강사 모집'), ewhaian.Post(103, '과외 구함')]
+                                  ewhaian.Post(102, '학원 강사 모집'), ewhaian.Post(103, '과외 구함'),
+                                  ewhaian.Post(104, '학원 조교 모집')]
         dongaupdate.check_ewhaian_board(state)
-        self.assertEqual(state[self.key], '103')
+        self.assertEqual(state[self.key], '104')
         self.mail.assert_called_once()
         self.assertIn('/detail/101', self.mail.call_args.args[1])
         self.assertNotIn('/detail/102', self.mail.call_args.args[1])
         self.assertNotIn('/detail/103', self.mail.call_args.args[1])
+        self.assertNotIn('/detail/104', self.mail.call_args.args[1])
 
     def test_failed_non_tutoring_notification_retains_checkpoint(self):
         state = {self.key: '100'}
