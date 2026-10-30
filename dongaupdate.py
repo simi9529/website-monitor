@@ -254,7 +254,7 @@ def check_youtube_board(board, state):
 # 이화이언 로그인 게시판
 # ======================
 EWHA_STATE_KEY = "ewhaian_life_66"
-EWHA_EXCLUDED_TITLE_WORDS = ("과외", "강사", "조교")
+EWHA_EXCLUDED_TITLE_WORDS = ("과외", "강사", "조교", "돌봄", "중국어")
 
 
 def send_ewhaian_digest(posts, test=False):
