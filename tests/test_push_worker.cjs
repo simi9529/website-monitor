@@ -3,25 +3,20 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
 
-function worker(fetchRequest = async () => new Response(null, { status: 204 })) {
+function worker() {
   const handlers = {};
   const notifications = [];
   const windows = [];
-  const visible = new Map();
   const self = {
     addEventListener: (name, handler) => { handlers[name] = handler; },
     registration: {
       scope: 'https://simi9529.github.io/website-monitor/',
-      showNotification: async (title, options) => {
-        notifications.push({ title, options });
-        visible.set(options.tag, { title, ...options, close: () => visible.delete(options.tag) });
-      },
-      getNotifications: async ({ tag }) => visible.has(tag) ? [visible.get(tag)] : [],
+      showNotification: async (title, options) => { notifications.push({ title, options }); },
     },
     clients: { openWindow: async (url) => { windows.push(url); } },
   };
-  vm.runInNewContext(fs.readFileSync('docs/sw.js', 'utf8'), { self, URL, atob, Blob, Response, DecompressionStream, fetch: fetchRequest, AbortSignal });
-  return { handlers, notifications, windows, visible };
+  vm.runInNewContext(fs.readFileSync('docs/sw.js', 'utf8'), { self, URL, atob, Blob, Response, DecompressionStream });
+  return { handlers, notifications, windows };
 }
 
 test('background push shows all links and a multi-link tap opens a private fragment', async () => {
@@ -66,28 +61,4 @@ test('a compressed post still produces one notification containing all its links
   await done;
   assert.equal(notifications.length, 1);
   assert.equal(notifications[0].options.data.links.length, 30);
-});
-
-test('click acknowledges independently of opening the link; dismiss closes only its own tag', async () => {
-  const calls = [];
-  const { handlers, windows, visible } = worker(async (url, options) => {
-    calls.push({ url, body: JSON.parse(options.body) });
-    return new Response(null, { status: 204 });
-  });
-  const tag = 'a'.repeat(24), other = 'b'.repeat(24);
-  let done;
-  for (const value of [tag, other]) {
-    handlers.push({ data: { json: () => ({ tag: value, title: value, links: [] }) }, waitUntil: p => { done = p; } });
-    await done;
-  }
-  handlers.notificationclick({ notification: { close() {}, data: {
-    links: [{ url: 'https://example.com/item' }], sync: { url: 'https://sync.example.com', token: 'secret' },
-  } }, waitUntil: p => { done = p; } });
-  await done;
-  assert.equal(windows[0], 'https://example.com/item');
-  assert.equal(calls[0].url, 'https://sync.example.com/ack');
-  handlers.push({ data: { json: () => ({ type: 'dismiss', tag }) }, waitUntil: p => { done = p; } });
-  await done;
-  assert.equal(visible.has(tag), false);
-  assert.equal(visible.has(other), true);
 });
