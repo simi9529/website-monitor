@@ -48,6 +48,8 @@ jobs:
       TEST_PUSH_URL: ${{ github.event.inputs.test_push_url || '' }}
       VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
       WEB_PUSH_SUBSCRIPTIONS: ${{ secrets.WEB_PUSH_SUBSCRIPTIONS }}
+      PUSH_SYNC_URL: ${{ vars.PUSH_SYNC_URL }}
+      PUSH_SYNC_API_KEY: ${{ secrets.PUSH_SYNC_API_KEY }}
       NOTIFICATION_CHANNELS: ${{ vars.NOTIFICATION_CHANNELS || 'auto' }}
 
     steps:

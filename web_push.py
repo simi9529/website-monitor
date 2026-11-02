@@ -112,12 +112,21 @@ def send_push(subject, body, items=None):
         raise PushError("크롬 푸시 설정 누락: " + ", ".join(missing))
     subscriptions = _subscriptions(os.environ["WEB_PUSH_SUBSCRIPTIONS"])
     messages = payloads(subject, body, items=items)
+    per_device = None
+    sync_url, sync_key = os.environ.get("PUSH_SYNC_URL"), os.environ.get("PUSH_SYNC_API_KEY")
+    if sync_url and sync_key:
+        try:
+            from push_sync import prepare
+            per_device = prepare(messages, subscriptions, os.environ["VAPID_PRIVATE_KEY"], sync_url, sync_key)
+        except Exception:
+            # Relay outages must not prevent delivery of the actual alert.
+            print("⚠️ 기기 동기화 등록 실패 → 이번 알림은 기존 방식으로 전송")
     try:
         from pywebpush import webpush, WebPushException
     except ImportError:
         raise PushError("푸시 발송 의존성을 설치하세요: pip install -r requirements.txt") from None
-    for subscription in subscriptions:
-        for message in messages:
+    for device_index, subscription in enumerate(subscriptions):
+        for message in (per_device[device_index] if per_device else messages):
             try:
                 webpush(
                     subscription_info=subscription, data=message,

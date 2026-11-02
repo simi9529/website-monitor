@@ -1,0 +1,7 @@
+name = "website-monitor-sync"
+main = "worker.mjs"
+compatibility_date = "2026-10-01"
+
+[[kv_namespaces]]
+binding = "ACK_STORE"
+id = "REPLACE_WITH_CREATED_KV_NAMESPACE_ID"
