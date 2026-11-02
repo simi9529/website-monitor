@@ -34,6 +34,34 @@ def message(message_id, author=2):
 
 
 class CanvasClientTests(unittest.TestCase):
+    def test_material_baseline_and_multiple_new_items(self):
+        def module(ids):
+            return {'id': 8, 'name': '8주차', 'items_count': len(ids),
+                    'items': [{'id': i, 'title': f'자료 {i}', 'type': 'ExternalTool'} for i in ids]}
+        session = MagicMock()
+        client = CanvasClient(session)
+        session.get.return_value = response([module([100])])
+        events, baseline = client.poll_materials('137766', now=NOW)
+        self.assertEqual(events, [])
+        session.get.return_value = response([module([100, 101, 102])])
+        events, checkpoint = client.poll_materials('137766', baseline, now=NOW)
+        self.assertEqual(len(events), 2)
+        self.assertEqual(checkpoint['seen_ids'], ['100', '101', '102'])
+        self.assertEqual({event.url for event in events}, {
+            'https://canvas.donga.ac.kr/courses/137766/modules/items/101',
+            'https://canvas.donga.ac.kr/courses/137766/modules/items/102'})
+        session.put.assert_not_called()
+        session.post.assert_not_called()
+
+    def test_materials_fetch_full_list_when_embedded_items_are_incomplete(self):
+        session = MagicMock()
+        client = CanvasClient(session)
+        session.get.side_effect = [response([{'id': 8, 'items_count': 2, 'items': [{'id': 100}]}]),
+                                   response([{'id': 100}, {'id': 101}])]
+        _, state = client.poll_materials('137766', now=NOW)
+        self.assertEqual(state['seen_ids'], ['100', '101'])
+        self.assertIn('/modules/8/items', session.get.call_args.args[0])
+
     def setUp(self):
         self.session = MagicMock()
         self.client = CanvasClient(self.session)

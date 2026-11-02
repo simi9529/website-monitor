@@ -354,7 +354,7 @@ def check_canvas_board(state):
         return
     try:
         with sso_session(username, password) as session:
-            monitor_canvas(CanvasClient(session), state, send_email)
+            monitor_canvas(CanvasClient(session), state, send_email, material_courses=("137766",))
     except CanvasError as error:
         print(f"⚠️ [Canvas] {error}")
 

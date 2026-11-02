@@ -213,6 +213,41 @@ class CanvasClient:
         return events, {"conversations": marks, "checked_at": now.isoformat()}
 
 
+    def poll_materials(self, course_id, previous=None, now=None):
+        """Read module metadata only; never launch content or mark it read."""
+        course_id = _id(course_id)
+        now = now or datetime.now(timezone.utc)
+        seen = set(previous.get("seen_ids", [])) if previous else set()
+        next_seen = set(seen)
+        events = []
+        for module in self._list(f"/api/v1/courses/{course_id}/modules", {
+            "include[]": "items", "per_page": 100,
+        }):
+            if module.get("published") is False:
+                continue
+            module_id = _id(module.get("id"))
+            items = module.get("items")
+            if not isinstance(items, list) or len(items) != module.get("items_count"):
+                items = self._list(f"/api/v1/courses/{course_id}/modules/{module_id}/items", {"per_page": 100})
+            for item in items:
+                if not isinstance(item, dict):
+                    raise CanvasError("강의자료 목록 응답 형식이 변경되었습니다")
+                if item.get("published") is False:
+                    continue
+                item_id = _id(item.get("id"))
+                next_seen.add(item_id)
+                if previous is not None and item_id not in seen:
+                    title = item.get("title")
+                    if not isinstance(title, str) or not title.strip():
+                        raise CanvasError("강의자료 제목을 확인하지 못했습니다")
+                    link = item.get("html_url") or f"/courses/{course_id}/modules/items/{item_id}"
+                    events.append(Notification(
+                        "동아대 LMS 강의자료", f"{module.get('name', '주차 자료')} · {title}",
+                        self._url(link, api_only=False), now,
+                    ))
+        return events, {"seen_ids": sorted(next_seen), "checked_at": now.isoformat()}
+
+
 def notification_body(events):
     return "[동아대 Canvas 새 알림]\n\n" + "\n\n".join(
         f"{index}. [{event.kind}] {event.title}\n" + "\n".join(event.links or (event.url,))
@@ -226,13 +261,15 @@ def notification_items(events):
             for event in events]
 
 
-def monitor_canvas(client, state, send_email):
+def monitor_canvas(client, state, send_email, material_courses=()):
     """Poll both areas independently and acknowledge only after a whole digest."""
     previous = state.get(STATE_KEY, {})
     next_state = dict(previous)
     events = []
-    for name, poll in [("announcements", client.poll_announcements),
-                       ("messages", client.poll_messages)]:
+    polls = [("announcements", client.poll_announcements), ("messages", client.poll_messages)]
+    polls.extend((f"materials_{course}", lambda previous, course=course: client.poll_materials(course, previous))
+                 for course in material_courses)
+    for name, poll in polls:
         try:
             updates, checkpoint = poll(previous.get(name))
         except CanvasError as error:
