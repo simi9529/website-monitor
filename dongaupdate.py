@@ -51,20 +51,10 @@ DONGA_BOARDS = [
 # ======================
 # 유튜브 모니터링
 # ======================
-YOUTUBE_BOARDS = [
-    {
-        "name": "공모주린이",
-        "url": "https://www.youtube.com/@%EA%B3%B5%EB%AA%A8%EC%A3%BC%EB%A6%B0%EC%9D%B4_0301/posts"
-    },
-     {
-        "name": "공모주린이2",
-        "url": "https://www.youtube.com/@%EA%B3%B5%EB%AA%A8%EC%A3%BC%EB%A6%B0%EC%9D%B42/posts"
-    },
-    {
-        "name": "공모주투자의법칙",
-        "url": "https://www.youtube.com/@%EA%B3%B5%EB%AA%A8%EC%A3%BC%ED%88%AC%EC%9E%90%EC%9D%98%EB%B2%95%EC%B9%99/posts"
-    }
-]
+YOUTUBE_BOARDS = [{
+    "name": "공모주투자의법칙",
+    "url": "https://www.youtube.com/@%EA%B3%B5%EB%AA%A8%EC%A3%BC%ED%88%AC%EC%9E%90%EC%9D%98%EB%B2%95%EC%B9%99/streams",
+}]
 
 # ======================
 # 상태
@@ -173,82 +163,9 @@ def check_donga_board(board, state):
 # ======================
 # 유튜브 커뮤니티 체크 (신규)
 # ======================
-def youtube_posts(data):
-    """Read posts from the selected posts tab, including modern rich grids."""
-    tabs = data.get("contents", {}).get("twoColumnBrowseResultsRenderer", {}).get("tabs", [])
-    posts = {}
-
-    def walk(value):
-        if isinstance(value, dict):
-            for key, child in value.items():
-                if key in ("backstagePostRenderer", "postRenderer") and isinstance(child, dict) and child.get("postId"):
-                    posts.setdefault(child["postId"], child)
-                else:
-                    walk(child)
-        elif isinstance(value, list):
-            for child in value:
-                walk(child)
-
-    for tab in tabs:
-        tab = tab.get("tabRenderer", {})
-        url = tab.get("endpoint", {}).get("commandMetadata", {}).get("webCommandMetadata", {}).get("url", "")
-        if "/posts" in url or "/community" in url or tab.get("selected"):
-            walk(tab.get("content", {}))
-    return list(posts.values())
-
-
 def check_youtube_board(board, state):
-    print(f"🔍 [{board['name']}] 유튜브 확인 중...")
-
-    res = safe_get(board["url"], board["name"])
-    if res is None or res.status_code != 200:
-        return
-
-    # 정규식으로 ytInitialData JSON 객체 추출
-    match = re.search(r"var ytInitialData = (\{.*?\});</script>", res.text)
-    if not match:
-        print(f"⚠️ [{board['name']}] 데이터를 찾을 수 없습니다. (유튜브 차단 또는 구조 변경)")
-        return
-
-    try:
-        yt_data = json.loads(match.group(1))
-
-        posts = youtube_posts(yt_data)
-        if not posts:
-            print(f"⚠️ [{board['name']}] 게시물 목록이 비어있습니다.")
-            return
-
-        state_key = f"youtube_{board['name']}"
-        last_post_id = state.get(state_key)
-        if last_post_id is None:
-            state[state_key] = posts[0]['postId']
-            print(f"✅ [{board['name']}] 최초 확인 완료 → 다음 새 글부터 알림")
-            return
-        pending = []
-        found_previous = False
-        for post in posts:
-            if post['postId'] == last_post_id:
-                found_previous = True
-                break
-            pending.append(post)
-        if last_post_id is not None and not found_previous:
-            print(f"⚠️ [{board['name']}] 현재 목록에서 이전 글을 찾지 못했습니다 → 기준 유지")
-            return
-        for post in reversed(pending):
-            post_id = post['postId']
-
-            # 여러 줄로 나뉜 텍스트 합치기
-            runs = post.get("contentText", {}).get("runs", [])
-            text_content = "".join([r.get("text", "") for r in runs]).strip()
-            preview_text = text_content[:30] + "..." if len(text_content) > 30 else text_content
-
-            post_link = f"https://www.youtube.com/post/{post_id}"
-            body = (f"[{board['name']} 유튜브 새 커뮤니티 글]\n\n"
-                    f"내용:\n{text_content}\n\n링크: {post_link}")
-            send_email(f"[유튜브] {board['name']} 새 글", body)
-            state[state_key] = post_id
-    except Exception as e:
-        print(f"⚠️ [{board['name']}] 파싱 중 오류 발생: {e}")
+    from youtube_live import monitor_live
+    monitor_live(board, state, safe_get, send_email)
 
 # ======================
 # 이화이언 로그인 게시판
