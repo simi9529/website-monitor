@@ -57,7 +57,9 @@ def live_streams(data):
             badge = detail.get("metadataBadgeRenderer", {})
             modern_badge = detail.get("thumbnailBadgeViewModel", {})
             active = active or overlay.get("style") == "LIVE" or badge.get("style") == "BADGE_STYLE_TYPE_LIVE_NOW"
-            active = active or modern_badge.get("badgeStyle") == "THUMBNAIL_BADGE_STYLE_LIVE"
+            active = active or modern_badge.get("badgeStyle") in {
+                "THUMBNAIL_BADGE_STYLE_LIVE", "THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE",
+            }
         # Title words such as LIVE / 실시간 are never proof of a live broadcast.
         videos[video_id] = {"id": video_id, "title": title, "active": active and not upcoming}
     if not videos:
