@@ -54,7 +54,8 @@ def _allowed(url):
 
 def _handle_dialog(page, dialog, replace_existing):
     duplicate = ("이전 로그인을 끊고 강제로 로그인하시겠습니까?" in dialog.message
-                 or "Do you want to terminate the previous login and force a login?" in dialog.message)
+                 or "Do you want to terminate the previous login and force a login?" in dialog.message
+                 or "Do you want to end the previous session and log in?" in dialog.message)
     if (replace_existing and dialog.type == "confirm" and duplicate
             and urlsplit(page.url).hostname == "login.donga.ac.kr"):
         dialog.accept()

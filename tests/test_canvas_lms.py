@@ -310,6 +310,8 @@ class LoginDiagnosticsTests(unittest.TestCase):
             (True, 'login.donga.ac.kr', 'confirm', '추가 인증 동의', False),
             (True, 'login.donga.ac.kr', 'alert', '이전 로그인을 끊고 강제로 로그인하시겠습니까?', False),
             (True, 'login.donga.ac.kr', 'confirm', 'Do you want to terminate the previous login and force a login?', True),
+            (True, 'login.donga.ac.kr', 'confirm', 'This ID is already logged in.\nConnected IP: fixture\nDo you want to end the previous session and log in?', True),
+            (False, 'login.donga.ac.kr', 'confirm', 'Do you want to end the previous session and log in?', False),
         ]:
             with self.subTest(allowed=allowed, host=host, kind=kind, message=message):
                 page = MagicMock(url='https://' + host + '/login')
