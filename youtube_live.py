@@ -1,10 +1,10 @@
-"""Notify once per currently live stream whose title contains 비례배정."""
+"""Notify once per currently live stream whose title contains 실시간 경쟁률."""
 
 import json
 import re
 
 
-STATE_KEY = "youtube_live_proportional_allocation"
+STATE_KEY = "youtube_live_realtime_competition"
 
 
 def walk(value):
@@ -81,7 +81,7 @@ def monitor_live(board, state, get, notify):
         print("⚠️ [유튜브 라이브] 방송 상태를 확인하지 못했습니다. 알림 기준 유지")
         return
     seen = list(state.get(STATE_KEY, {}).get("notified_ids", []))
-    matches = [video for video in videos if video["active"] and "비례배정" in video["title"]]
+    matches = [video for video in videos if video["active"] and "실시간경쟁률" in re.sub(r"\s+", "", video["title"])]
     count = 0
     for video in matches:
         if video["id"] in seen:
@@ -89,7 +89,7 @@ def monitor_live(board, state, get, notify):
         url = "https://www.youtube.com/watch?v=" + video["id"]
         try:
             notify("[라이브 방송 중] " + video["title"], video["title"] + "\n" + url,
-                   push_items=[{"id": url, "title": video["title"], "body": "비례배정 라이브 방송 중",
+                   push_items=[{"id": url, "title": video["title"], "body": "실시간 경쟁률 라이브 방송 중",
                                 "links": [{"title": video["title"], "url": url}]}])
         except Exception:
             print("⚠️ [유튜브 라이브] 전송 실패 → 다음 회차 재시도")
@@ -97,4 +97,4 @@ def monitor_live(board, state, get, notify):
         seen.append(video["id"])
         state[STATE_KEY] = {"notified_ids": seen[-500:]}
         count += 1
-    print(f"✅ [유튜브 라이브] 동영상 {len(videos)}개 확인, 비례배정 방송 중 {len(matches)}개, 새 알림 {count}개")
+    print(f"✅ [유튜브 라이브] 동영상 {len(videos)}개 확인, 실시간 경쟁률 방송 중 {len(matches)}개, 새 알림 {count}개")

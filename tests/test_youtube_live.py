@@ -17,8 +17,8 @@ class LiveTests(unittest.TestCase):
                     'text': '라이브', 'badgeStyle': style,
                     'icon': {'sources': [{'clientResource': {'imageName': 'LIVE'}}]}
                 }}]}}}}
-        data = {'contents': {'items': [item('O_byZegF9TQ', '[비례배정 LIVE] 동원파츠', 'THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE'),
-                             item('aaaaaaaaaaa', '비례배정 LIVE 지난 방송', 'THUMBNAIL_OVERLAY_BADGE_STYLE_DEFAULT')]}}
+        data = {'contents': {'items': [item('O_byZegF9TQ', '[실시간 경쟁률 LIVE] 동원파츠', 'THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE'),
+                             item('aaaaaaaaaaa', '실시간 경쟁률 LIVE 지난 방송', 'THUMBNAIL_OVERLAY_BADGE_STYLE_DEFAULT')]}}
         result = live_streams(data)
         self.assertTrue(result[0]['active'])
         self.assertFalse(result[1]['active'])
@@ -37,9 +37,9 @@ class LiveTests(unittest.TestCase):
         return item
 
     def test_only_matching_current_live_alerts_once(self):
-        entries = [self.video('aaaaaaaaaaa', '비례배정 안내', True),
-                   self.video('bbbbbbbbbbb', '비례배정 LIVE 지난 방송'),
-                   self.video('ccccccccccc', '비례배정 예정', True, True),
+        entries = [self.video('aaaaaaaaaaa', '실시간 경쟁률 안내', True),
+                   self.video('bbbbbbbbbbb', '실시간 경쟁률 LIVE 지난 방송'),
+                   self.video('ccccccccccc', '실시간 경쟁률 예정', True, True),
                    self.video('ddddddddddd', '다른 방송', True)]
         state = {}; notify = Mock()
         self.run_check(state, notify, entries)
@@ -50,11 +50,21 @@ class LiveTests(unittest.TestCase):
 
     def test_upcoming_can_later_become_live_and_failed_send_retries(self):
         state = {}; notify = Mock()
-        self.run_check(state, notify, [self.video('aaaaaaaaaaa', '비례배정', True, True)])
+        self.run_check(state, notify, [self.video('aaaaaaaaaaa', '실시간 경쟁률', True, True)])
         notify.assert_not_called()
         notify.side_effect = RuntimeError('temporary')
-        self.run_check(state, notify, [self.video('aaaaaaaaaaa', '비례배정', True)])
+        self.run_check(state, notify, [self.video('aaaaaaaaaaa', '실시간 경쟁률', True)])
         self.assertNotIn(STATE_KEY, state)
         notify.side_effect = None
-        self.run_check(state, notify, [self.video('aaaaaaaaaaa', '비례배정', True)])
+        self.run_check(state, notify, [self.video('aaaaaaaaaaa', '실시간 경쟁률', True)])
         self.assertEqual(state[STATE_KEY]['notified_ids'], ['aaaaaaaaaaa'])
+
+    def test_spacing_variants_match_but_old_keyword_does_not(self):
+        state = {}; notify = Mock()
+        entries = [self.video('aaaaaaaaaaa', '실시간경쟁률 LIVE', True),
+                   self.video('bbbbbbbbbbb', '실시간 경쟁률 안내', True),
+                   self.video('ccccccccccc', '비례배정 LIVE', True),
+                   self.video('ddddddddddd', '경쟁률 LIVE', True)]
+        self.run_check(state, notify, entries)
+        self.assertEqual(notify.call_count, 2)
+        self.assertEqual(state[STATE_KEY]['notified_ids'], ['aaaaaaaaaaa', 'bbbbbbbbbbb'])
