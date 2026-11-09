@@ -23,7 +23,7 @@
         "139496:287965",
         "139496:288975"
       ],
-      "checked_at": "2026-11-09T00:16:11.605952+00:00"
+      "checked_at": "2026-11-09T00:21:13.337836+00:00"
     },
     "messages": {
       "conversations": {
@@ -420,7 +420,7 @@
           "last_message_id": 4918173
         }
       },
-      "checked_at": "2026-11-09T00:16:13.518647+00:00"
+      "checked_at": "2026-11-09T00:21:15.004879+00:00"
     },
     "materials_137766": {
       "seen_ids": [
@@ -450,7 +450,7 @@
         "8182464",
         "8184106"
       ],
-      "checked_at": "2026-11-09T00:16:15.075499+00:00"
+      "checked_at": "2026-11-09T00:21:16.390667+00:00"
     }
   },
   "youtube_공모주투자의법칙": "UgkxdudnPD02LqHe70vVp9aAx9rpC67gKxLv",
@@ -466,6 +466,11 @@
       "rsRGD1G4rHU",
       "9vJCNsndwJU",
       "uNkcBNX_3Oc"
+    ]
+  },
+  "youtube_live_realtime_competition": {
+    "notified_ids": [
+      "YBTBDgdm_YM"
     ]
   }
 }
