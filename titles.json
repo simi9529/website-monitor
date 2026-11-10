@@ -1,13 +1,13 @@
 {
   "동아대 law 학사공지": "8520021",
   "동아대 law 수업공지": "8515079",
-  "동아대 law 특강및 모의고사": "8519689",
+  "동아대 law 특강및 모의고사": "8520160",
   "이화이언 자유게시판": "솔닥(주) 기획운영팀 신입 운영매니저 채용",
   "공모주는 커피다": "Something went wrong, but don’t fret — let’s give it another shot.",
   "youtube_공모주린이0301": "Ugkx0PRs2AS6dkcVp-fls5kboCQg9Z73JPZw",
   "youtube_공모주린이": "Ugkx-hT9H0dU0BNQsDKUPkqcxEavqpSoxsNB",
   "youtube_공모주린이2": "UgkxNjKZ2ojC57kD5gNM76SzuqZdPGBqJIuH",
-  "ewhaian_life_66": "5000129532",
+  "ewhaian_life_66": "5000130034",
   "canvas_lms": {
     "announcements": {
       "seen_ids": [
@@ -23,7 +23,7 @@
         "139496:287965",
         "139496:288975"
       ],
-      "checked_at": "2026-11-10T04:36:04.755073+00:00"
+      "checked_at": "2026-11-10T10:41:28.081856+00:00"
     },
     "messages": {
       "conversations": {
@@ -418,9 +418,16 @@
             1
           ],
           "last_message_id": 4918173
+        },
+        "3800318": {
+          "signature": [
+            "2026-11-10T10:41:11Z",
+            1
+          ],
+          "last_message_id": 4931188
         }
       },
-      "checked_at": "2026-11-10T04:36:07.094997+00:00"
+      "checked_at": "2026-11-10T10:41:29.742118+00:00"
     },
     "materials_137766": {
       "seen_ids": [
@@ -448,9 +455,10 @@
         "8179038",
         "8181036",
         "8182464",
-        "8184106"
+        "8184106",
+        "8185588"
       ],
-      "checked_at": "2026-11-10T04:36:10.645783+00:00"
+      "checked_at": "2026-11-10T10:41:32.029287+00:00"
     }
   },
   "youtube_공모주투자의법칙": "UgkxdudnPD02LqHe70vVp9aAx9rpC67gKxLv",
