@@ -105,9 +105,23 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Install Canvas login browser
+      - name: Verify preinstalled Canvas login browser
         if: env.CANVAS_ID != '' && env.CANVAS_PW != '' && env.SEND_LATEST_EWHAIAN != 'true' && env.TEST_PUSH != 'true'
-        run: python -m playwright install --with-deps chromium
+        run: |
+          python - <<'PY'
+          import shutil
+          from playwright.sync_api import sync_playwright
+          path = shutil.which("google-chrome")
+          if not path:
+              raise SystemExit("GitHub 실행 서버에 기본 Chrome이 없습니다. 실행 이미지 확인이 필요합니다.")
+          with sync_playwright() as playwright:
+              browser = playwright.chromium.launch(executable_path=path, headless=True)
+              page = browser.new_page()
+              page.set_content("<title>browser-ready</title>")
+              assert page.title() == "browser-ready"
+              print("기본 Chrome 실행 확인 완료:", browser.version)
+              browser.close()
+          PY
 
       - name: Run script
         run: |

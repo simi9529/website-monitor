@@ -3,6 +3,7 @@
 from contextlib import contextmanager
 import json
 import os
+import shutil
 from pathlib import Path
 from urllib.parse import unquote, urljoin, urlsplit
 
@@ -110,7 +111,9 @@ def sso_session(username, password, replace_existing=None):
     try:
         with sync_playwright() as playwright:
             options = {"headless": True}
-            if not os.environ.get("GITHUB_ACTIONS") and Path("/usr/bin/chromium").exists():
+            if os.environ.get("GITHUB_ACTIONS") and shutil.which("google-chrome"):
+                options["executable_path"] = shutil.which("google-chrome")
+            elif not os.environ.get("GITHUB_ACTIONS") and Path("/usr/bin/chromium").exists():
                 options["executable_path"] = "/usr/bin/chromium"
             proxy = urlsplit(os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy") or "")
             if proxy.hostname:
