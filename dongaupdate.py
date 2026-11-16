@@ -265,6 +265,9 @@ def send_latest_ewhaian():
 # 동아대 Canvas: 공지사항 + 대화메시지
 # ======================
 def check_canvas_board(state):
+    if os.environ.get("CANVAS_MONITORING_PAUSED", "true").lower() == "true":
+        print("⏸ [Canvas] 사용자 요청으로 LMS 모니터링 중지 → 로그인하지 않음")
+        return
     username, password = os.environ.get("CANVAS_ID"), os.environ.get("CANVAS_PW")
     if not username or not password:
         print("⏭ [Canvas] CANVAS_ID 또는 CANVAS_PW 미설정 → 스킵")
@@ -277,6 +280,9 @@ def check_canvas_board(state):
 
 
 def send_latest_canvas():
+    if os.environ.get("CANVAS_MONITORING_PAUSED", "true").lower() == "true":
+        print("⏸ [Canvas] 사용자 요청으로 LMS 시험 로그인·알림도 중지")
+        return 0
     required = ["CANVAS_ID", "CANVAS_PW"] + required_variables()
     missing = [name for name in required if not os.environ.get(name)]
     if missing:

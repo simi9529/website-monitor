@@ -260,11 +260,23 @@ class CanvasIntegrationTests(unittest.TestCase):
         self.stack.enter_context(patch.dict("os.environ", dict.fromkeys([
             "CANVAS_ID", "CANVAS_PW", "FROM_EMAIL", "TO_EMAIL", "APP_PASSWORD"
         ], "fixture-only")))
+        self.stack.enter_context(patch.dict("os.environ", {"CANVAS_MONITORING_PAUSED": "false"}))
         self.login = self.stack.enter_context(patch("dongaupdate.sso_session"))
         self.factory = self.stack.enter_context(patch("dongaupdate.CanvasClient"))
         self.mail = self.stack.enter_context(patch("dongaupdate.send_email"))
         self.save = self.stack.enter_context(patch("dongaupdate.save_state"))
         self.load = self.stack.enter_context(patch("dongaupdate.load_state", return_value={}))
+
+    def test_paused_monitor_and_test_never_attempt_login(self):
+        with patch.dict("os.environ", {"CANVAS_MONITORING_PAUSED": "true"}):
+            state = {STATE_KEY: {"announcements": {"seen_ids": ['1:1']}}}
+            previous = deepcopy(state)
+            self.app.check_canvas_board(state)
+            self.assertEqual(state, previous)
+            self.assertEqual(self.app.send_latest_canvas(), 0)
+        self.login.assert_not_called()
+        self.mail.assert_not_called()
+        self.save.assert_not_called()
 
     def test_missing_canvas_password_skips_login(self):
         with patch.dict("os.environ", {"CANVAS_PW": ""}):
