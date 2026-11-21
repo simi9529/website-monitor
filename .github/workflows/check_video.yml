@@ -25,7 +25,7 @@ jobs:
                 const v=document.querySelector('video');
                 if (!v) return {video:false};
                 v.muted=true;
-                try { await v.play(); } catch (_) {}
+                try { v.play().catch(() => {}); } catch (_) {}
                 return {video:true,ready:v.readyState,time:v.currentTime};
               }''')
               page.wait_for_timeout(12000)
