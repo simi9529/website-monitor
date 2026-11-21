@@ -285,6 +285,25 @@ class CanvasIntegrationTests(unittest.TestCase):
         self.login.assert_not_called()
         self.mail.assert_not_called()
 
+    def test_automatic_login_waits_thirty_minutes_after_success(self):
+        state = {}
+        with patch('dongaupdate.monitor_canvas'):
+            self.app.check_canvas_board(state, now=NOW)
+            self.app.check_canvas_board(state, now=NOW + timedelta(minutes=29, seconds=59))
+            self.assertEqual(self.login.call_count, 1)
+            self.app.check_canvas_board(state, now=NOW + timedelta(minutes=30))
+            self.assertEqual(self.login.call_count, 2)
+
+    def test_failed_login_also_waits_thirty_minutes_across_state_reload(self):
+        state = {}
+        self.login.side_effect = CanvasError('9010')
+        self.app.check_canvas_board(state, now=NOW)
+        restored = deepcopy(state)
+        self.app.check_canvas_board(restored, now=NOW + timedelta(minutes=5))
+        self.assertEqual(self.login.call_count, 1)
+        self.app.check_canvas_board(restored, now=NOW + timedelta(minutes=30))
+        self.assertEqual(self.login.call_count, 2)
+
     def test_test_digest_contains_latest_item_from_each_area(self):
         old = Notification("공지사항", "이전 공지", "https://canvas.donga.ac.kr/old", NOW - timedelta(days=1))
         notice = Notification("공지사항", "최신 공지", "https://canvas.donga.ac.kr/notice", NOW)

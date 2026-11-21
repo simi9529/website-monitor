@@ -264,7 +264,7 @@ def send_latest_ewhaian():
 # ======================
 # 동아대 Canvas: 공지사항 + 대화메시지
 # ======================
-def check_canvas_board(state):
+def check_canvas_board(state, now=None):
     if os.environ.get("CANVAS_MONITORING_PAUSED", "true").lower() == "true":
         print("⏸ [Canvas] 사용자 요청으로 LMS 모니터링 중지 → 로그인하지 않음")
         return
@@ -272,6 +272,17 @@ def check_canvas_board(state):
     if not username or not password:
         print("⏭ [Canvas] CANVAS_ID 또는 CANVAS_PW 미설정 → 스킵")
         return
+    now = now or datetime.now(timezone.utc)
+    try:
+        last_attempt = datetime.fromisoformat(state.get("canvas_login_last_attempt_at", ""))
+        if last_attempt.tzinfo is not None and now - last_attempt < timedelta(minutes=30):
+            print("⏭ [Canvas] 마지막 로그인 시도 후 30분 미경과 → 이번 회차 건너뜀")
+            return
+    except (TypeError, ValueError):
+        pass
+    # Record failures as well as successes so a rejected login is not retried
+    # every five minutes. main() persists this together with other checkpoints.
+    state["canvas_login_last_attempt_at"] = now.isoformat()
     try:
         with sso_session(username, password) as session:
             monitor_canvas(CanvasClient(session), state, send_email, material_courses=("137766",))
