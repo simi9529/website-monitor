@@ -79,14 +79,17 @@ def playlists(data):
 def monitor_channel_live(board, state, get, notify, post=requests.post):
     videos = {}
     playlist_ids = set()
+    phase = "라이브 목록"
     try:
         for page in browse(CHANNEL + "/streams", board["name"], get, post):
             videos.update((video["id"], video) for video in live_streams(page, allow_empty=True))
+        phase = "재생목록 목록"
         for page in browse(CHANNEL + "/playlists", board["name"], get, post):
             playlist_ids.update(playlists(page))
         if len(playlist_ids) > MAX_PLAYLISTS:
             raise ValueError("too many playlists")
         for playlist_id in sorted(playlist_ids):
+            phase = "재생목록 영상"
             for page in browse("https://www.youtube.com/playlist?list=" + playlist_id, board["name"], get, post):
                 for video in live_streams(page, allow_empty=True):
                     old = videos.get(video["id"])
@@ -95,8 +98,9 @@ def monitor_channel_live(board, state, get, notify, post=requests.post):
                     videos[video["id"]] = video
         if not videos:
             raise ValueError("no video metadata")
-    except (ValueError, TypeError, KeyError, requests.RequestException):
-        print("⚠️ [공모주투자] 라이브·재생목록 조회 불완전 → 기준 유지, 다음 회차 재시도")
+    except (ValueError, TypeError, KeyError, requests.RequestException) as error:
+        reason = str(error) if type(error) is ValueError else type(error).__name__
+        print(f"⚠️ [공모주투자] {phase} 조회 불완전 ({reason}) → 기준 유지, 다음 회차 재시도")
         return
     notified = list(state.get(STATE_KEY, {}).get("notified_ids", []))
     count = 0
