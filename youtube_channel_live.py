@@ -42,15 +42,19 @@ def browse(url, name, get, post):
         except (ValueError, AttributeError):
             continue
     visited = set()
+    pending = []
     for _ in range(MAX_PAGES):
-        tokens = [node["continuationCommand"].get("token") for node in walk(selected(data) if "contents" in data else data)
-                  if isinstance(node.get("continuationCommand"), dict)]
-        tokens = list(dict.fromkeys(token for token in tokens if token and token not in visited))
-        if not tokens:
+        # Filter chips also contain continuationCommand; only a real "load
+        # more" item is pagination. Following chip commands changes filters.
+        tokens = [node["continuationItemRenderer"].get("continuationEndpoint", {}).get("continuationCommand", {}).get("token")
+                  for node in walk(selected(data) if "contents" in data else data)
+                  if isinstance(node.get("continuationItemRenderer"), dict)]
+        pending.extend(token for token in dict.fromkeys(tokens) if token and token not in visited and token not in pending)
+        if not pending:
             return
-        if not context or len(tokens) != 1:
+        if not context:
             raise ValueError("pagination context unavailable")
-        token = tokens[0]
+        token = pending.pop(0)
         visited.add(token)
         result = post("https://www.youtube.com/youtubei/v1/browse",
                       json={"context": context, "continuation": token}, timeout=(5, 20),

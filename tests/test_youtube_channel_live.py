@@ -69,3 +69,11 @@ class ChannelLiveTests(unittest.TestCase):
         monitor_channel_live(self.board, state, Mock(return_value=Mock(status_code=403)), notify)
         self.assertEqual(state, {})
         notify.assert_not_called()
+
+    def test_filter_chip_commands_are_not_pagination(self):
+        first = page([video('aaaaaaaaaaa'), {'chipCloudChipRenderer': {
+            'navigationEndpoint': {'continuationCommand': {'token': 'live-filter'}}}}])
+        post = Mock()
+        pages = list(browse(CHANNEL + '/streams', 'channel', Mock(return_value=first), post))
+        self.assertEqual(len(pages), 1)
+        post.assert_not_called()
