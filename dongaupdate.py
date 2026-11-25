@@ -54,6 +54,10 @@ DONGA_BOARDS = [
 YOUTUBE_BOARDS = [{
     "name": "공모주투자의법칙",
     "url": "https://www.youtube.com/@%EA%B3%B5%EB%AA%A8%EC%A3%BC%ED%88%AC%EC%9E%90%EC%9D%98%EB%B2%95%EC%B9%99/streams",
+}, {
+    "name": "공모주투자",
+    "url": "https://www.youtube.com/channel/UCRrRALymR3fxeU5f7GkLuVA/streams",
+    "mode": "channel_live",
 }]
 
 # ======================
@@ -164,6 +168,10 @@ def check_donga_board(board, state):
 # 유튜브 커뮤니티 체크 (신규)
 # ======================
 def check_youtube_board(board, state):
+    if board.get("mode") == "channel_live":
+        from youtube_channel_live import monitor_channel_live
+        monitor_channel_live(board, state, safe_get, send_email)
+        return
     from youtube_live import monitor_live
     monitor_live(board, state, safe_get, send_email)
 

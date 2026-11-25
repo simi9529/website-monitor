@@ -25,7 +25,7 @@ def text(value):
     )
 
 
-def live_streams(data):
+def live_streams(data, allow_empty=False):
     videos = {}
     contents = data.get("contents", {})
     tabs = contents.get("twoColumnBrowseResultsRenderer", {}).get("tabs", [])
@@ -39,7 +39,8 @@ def live_streams(data):
     else:
         roots = contents
     for node in walk(roots):
-        candidate = node.get("videoRenderer") or node.get("gridVideoRenderer")
+        candidate = (node.get("videoRenderer") or node.get("gridVideoRenderer")
+                     or node.get("playlistVideoRenderer") or node.get("playlistPanelVideoRenderer"))
         modern = node.get("lockupViewModel")
         if not candidate and isinstance(modern, dict) and modern.get("contentType") == "LOCKUP_CONTENT_TYPE_VIDEO":
             candidate = modern
@@ -62,7 +63,7 @@ def live_streams(data):
             }
         # Title words such as LIVE / 실시간 are never proof of a live broadcast.
         videos[video_id] = {"id": video_id, "title": title, "active": active and not upcoming}
-    if not videos:
+    if not videos and not allow_empty:
         raise ValueError("라이브 탭의 동영상 목록을 확인하지 못했습니다")
     return list(videos.values())
 
