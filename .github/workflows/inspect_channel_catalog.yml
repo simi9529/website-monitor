@@ -16,14 +16,23 @@ jobs:
         run: |
           python - <<'PY'
           import requests
-          from youtube_channel_live import browse,CHANNEL,playlists,monitor_channel_live
-          from youtube_live import live_streams
+          import re,json
+          from youtube_channel_live import browse,CHANNEL,playlists,monitor_channel_live,initial,selected
+          from youtube_live import live_streams,walk
           def get(url,name):
               r=requests.get(url,timeout=20,headers={'User-Agent':'Mozilla/5.0'})
               print('GET',r.status_code,url)
               return r
           monitor_channel_live({'name':'공모주투자'},{},get,lambda *a,**k:print('MATCHING_ACTIVE_BROADCAST'))
           for suffix in ['/streams','/playlists']:
+              raw=get(CHANNEL+suffix,'channel')
+              data=initial(raw.text)
+              print('TABS',suffix,[(x.get('tabRenderer',{}).get('title'),x.get('tabRenderer',{}).get('selected')) for x in data.get('contents',{}).get('twoColumnBrowseResultsRenderer',{}).get('tabs',[])])
+              print('TOKENS',suffix,sum(1 for n in walk(selected(data)) if 'continuationCommand' in n),'CONFIG_MATCHES',len(list(re.finditer(r'ytcfg\.set\(\s*',raw.text))))
+              for m in re.finditer(r'ytcfg\.set\(\s*',raw.text):
+                  c=json.JSONDecoder().raw_decode(raw.text[m.end():])[0]
+                  print('CONFIG_CONTEXT',bool(c.get('INNERTUBE_CONTEXT')))
+              print('CONTENT_TYPES',suffix,sorted({n.get('contentType') for n in walk(selected(data)) if n.get('contentType')}))
               try:
                   for page in browse(CHANNEL+suffix,'channel',get,requests.post):
                       print('PAGE',suffix,'PLAYLISTS',sorted(playlists(page)),'VIDEOS',len(live_streams(page,allow_empty=True)))
